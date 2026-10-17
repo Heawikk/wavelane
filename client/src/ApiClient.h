@@ -56,6 +56,14 @@ public:
     void setAccessToken(const QString &token);
     void setRefreshToken(const QString &token);
     bool hasSession() const { return !m_refreshToken.isEmpty(); }
+
+    /*! True when the server itself refused the credentials (401/403).
+     *
+     *  Anything else — no connection, a timeout, a 5xx while the server
+     *  restarts — says nothing about whether the session is still good, so it
+     *  must never be treated as a reason to throw the stored token away.
+     */
+    static bool isRejection(int status) { return status == 401 || status == 403; }
     void clearTokens();
 
     //! Absolute URL for an API path such as "/wave/next".
@@ -95,7 +103,7 @@ private:
     void send(Request request);
     void finish(QNetworkReply *reply, Request request);
     void beginRefresh();
-    void failWaiting(const QString &reason);
+    void failWaiting(const QString &reason, int status);
 
     static Response parse(QNetworkReply *reply);
     static QString extractError(const Response &response, QNetworkReply *reply);

@@ -187,9 +187,23 @@ void ApiClient::beginRefresh()
 
         if (!response.ok()) {
             qCWarning(lcApi) << "token refresh failed:" << response.status << response.error;
-            clearTokens();
-            failWaiting(QStringLiteral("session expired, please sign in again"));
-            emit sessionExpired();
+
+            if (isRejection(response.status)) {
+                // The server looked at the token and refused it: it is spent,
+                // revoked or expired, and keeping it would only fail again.
+                clearTokens();
+                failWaiting(QStringLiteral("session expired, please sign in again"),
+                            response.status);
+                emit sessionExpired();
+            } else {
+                // The server could not be reached, or was having a bad moment.
+                // The token may be perfectly good, so keep it and let the
+                // caller retry later. Wiping it here is what used to sign
+                // people out whenever they started the app before the server.
+                failWaiting(response.error.isEmpty() ? QStringLiteral("server unavailable")
+                                                     : response.error,
+                            response.status);
+            }
             return;
         }
 
@@ -211,14 +225,16 @@ void ApiClient::beginRefresh()
     send(std::move(refresh));
 }
 
-void ApiClient::failWaiting(const QString &reason)
+void ApiClient::failWaiting(const QString &reason, int status)
 {
     const QList<Request> pending = std::move(m_waiting);
     m_waiting.clear();
     for (const Request &item : pending) {
         if (item.callback) {
             Response failure;
-            failure.status = 401;
+            // The real status, not a made-up 401: callers use it to decide
+            // whether the session is dead or the server is merely away.
+            failure.status = status;
             failure.error = reason;
             item.callback(failure);
         }

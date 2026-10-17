@@ -145,7 +145,16 @@ void AuthController::restoreSession()
     m_api->get(QStringLiteral("/auth/me"), [this](const ApiClient::Response &response) {
         setBusy(false);
         if (!response.ok()) {
-            m_api->clearTokens();
+            if (ApiClient::isRejection(response.status)) {
+                // The server refused the session: forget it.
+                m_api->clearTokens();
+            } else {
+                // Offline or the server is restarting. The stored session is
+                // untouched, so the next launch picks up where it left off;
+                // just tell the user why they are looking at a sign-in page.
+                setError(tr("Не удалось связаться с сервером %1. "
+                            "Проверьте, что он запущен.").arg(m_api->baseUrl()));
+            }
             emit restoreFinished(false);
             return;
         }
