@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Wavelane runtime data
+server/storage/
+server/*.db
+server/*.db-shm
+server/*.db-wal
+server/.env
+
+# Qt / CMake
+client/build*/
+client/.qt/
+*.user
+CMakeLists.txt.user*
+CMakeCache.txt
+CMakeFiles/
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Toolchain and generated media — far too large to commit
+tools/
+demo_music/
+aqtinstall.log
