@@ -33,7 +33,16 @@
 
 ## Быстрый старт
 
-### Сервер
+На Windows всё уже настроено — достаточно двух скриптов из корня проекта:
+
+```bat
+run-server.bat          :: сервер на http://127.0.0.1:8000
+run-client.bat          :: приложение
+```
+
+Сервер должен работать до запуска клиента. Закрыть сервер — `Ctrl+C` в его окне.
+
+### Сервер подробнее
 
 ```bash
 cd server
@@ -42,6 +51,14 @@ python -m venv ../.venv
 
 cp .env.example .env        # обязательно смените WAVELANE_SECRET_KEY
 ../.venv/Scripts/python.exe -m uvicorn wavelane.main:app --port 8000
+```
+
+`run-server.bat` делает то же и пропускает через себя любые опции uvicorn:
+
+```bat
+run-server.bat --reload               :: перезапуск при изменении кода
+run-server.bat --port 9000
+run-server.bat --host 0.0.0.0         :: доступ с других устройств в сети
 ```
 
 Документация API откроется на <http://127.0.0.1:8000/docs>.
@@ -68,26 +85,46 @@ curl -X POST http://127.0.0.1:8000/api/v1/admin/scan \
   -d '{"path":"E:/Wavelane/demo_music","recursive":true,"analyze":true}'
 ```
 
-### Клиент
+### Клиент подробнее
 
-Нужны Qt 6.5+ (с модулем Multimedia), CMake 3.21+ и компилятор C++20.
+Запуск — `run-client.bat`. Ключи:
 
 ```bat
-client\build.bat Release
-client\build\wavelane.exe
+run-client.bat --wave                        :: сразу включить волну
+run-client.bat --server http://host:8000     :: другой сервер
+run-client.bat --help                        :: остальное
 ```
 
-`build.bat` рассчитан на локальный Qt в `tools\Qt`. Если Qt стоит в другом
-месте — поправьте в нём `QT_DIR`, либо соберите вручную:
+Лог пишется в `%LOCALAPPDATA%\Wavelane\client.log` — у GUI-сборки на Windows нет
+консоли, так что при любой непонятной проблеме смотреть надо туда.
+
+### Сборка клиента
+
+Нужны Qt 6.5+ с модулем Multimedia, CMake 3.21+ и компилятор C++20.
+
+```bat
+client\build.bat Release     :: или Debug
+```
+
+Пересобирать нужно только после изменений в `client\src` или `client\qml`.
+Если клиент запущен, его надо закрыть — иначе компоновщик не сможет перезаписать
+`wavelane.exe`.
+
+`build.bat` жёстко указывает на Qt в `tools\Qt`, MSVC и pip-версии cmake/ninja,
+чтобы сборка не зависела от `PATH`. При другом расположении Qt поправьте в нём
+`QT_DIR` или соберите вручную:
 
 ```bash
 cmake -S client -B client/build -G Ninja -DCMAKE_PREFIX_PATH=/path/to/Qt/6.8.3/gcc_64
-cmake --build client/build
+cmake --build client/build --parallel
 ```
 
-Ключи запуска: `--wave` — сразу включить волну, `--server <url>` — другой сервер,
-`--help` — остальное. Переменная `WAVELANE_LOG_FILE` включает запись лога в файл
-(у GUI-сборки на Windows нет консоли).
+После первой сборки рядом с `wavelane.exe` нужно разложить библиотеки Qt —
+один раз:
+
+```bat
+tools\Qt\6.8.3\msvc2022_64\bin\windeployqt.exe --qmldir client\qml client\build\wavelane.exe
+```
 
 ### ffmpeg — настоятельно рекомендуется
 
