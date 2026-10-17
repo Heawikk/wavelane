@@ -71,6 +71,15 @@ void Settings::setRefreshToken(const QString &token)
         m_store.remove(kRefreshToken);
     else
         m_store.setValue(kRefreshToken, token);
+
+    // Flushed immediately, unlike every other setting here. The server rotates
+    // refresh tokens and treats a reused one as a leak, revoking the whole
+    // chain. QSettings writes lazily, so a crash or a killed process would
+    // leave the previous, already-spent token on disk — and the next start
+    // would present it, get the session revoked, and look like a random
+    // sign-out. Losing a remembered volume level to a crash is nothing; losing
+    // the session is worth the sync.
+    m_store.sync();
 }
 
 QString Settings::lastLogin() const
