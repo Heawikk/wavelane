@@ -44,5 +44,7 @@ struct Track
 
     //! "3:42"
     QString formattedDuration() const;
+    //! "FLAC" for lossless files, "192 kbps" for lossy ones.
+    QString qualityLabel() const;
     static QString formatMilliseconds(qint64 milliseconds);
 };

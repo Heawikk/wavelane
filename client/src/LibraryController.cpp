@@ -182,6 +182,7 @@ void LibraryController::setReaction(const QString &trackId, const QString &kind)
 
                    if (!liked)
                        m_liked->removeId(trackId);
+                   emit reactionChanged(trackId, liked, disliked);
                    loadStats();
                });
 }
@@ -195,6 +196,30 @@ void LibraryController::playFrom(TrackListModel *model, int row, const QString &
     m_activeContext = context.isEmpty() ? QStringLiteral("search") : context;
     m_activeRow = row;
     m_player->play(model->at(row), m_activeContext);
+}
+
+void LibraryController::loadDetail(const QString &trackId)
+{
+    if (trackId.isEmpty() || trackId == m_detailId)
+        return;
+    m_detailId = trackId;
+
+    m_api->get(QStringLiteral("/tracks/%1").arg(trackId),
+               [this, trackId](const ApiClient::Response &response) {
+                   // The selection may have moved on while this was in flight.
+                   if (trackId != m_detailId || !response.ok())
+                       return;
+                   m_detail = Track::fromJson(response.object).toVariantMap();
+                   emit detailChanged();
+               });
+}
+
+void LibraryController::playNext()
+{
+    if (!m_activeList)
+        return;
+    m_player->reportAndClear(true);
+    advanceWithinList();
 }
 
 void LibraryController::advanceWithinList()

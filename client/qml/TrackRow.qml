@@ -1,142 +1,203 @@
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import Wavelane
 
-/*! One track in a list. Used by every page, so it stays presentation-only. */
+/*!
+    One row of the track table.
+
+    Takes plain properties rather than model roles, so the same row serves a
+    list delegate and the "now playing" row above the queue. Column widths come
+    from the table, which keeps the rows and the header lined up.
+*/
 Rectangle {
     id: root
 
-    // Roles supplied by TrackListModel.
-    required property string trackId
-    required property string title
-    required property string artistName
-    required property string coverPath
-    required property string duration
-    required property bool liked
-    required property bool isExplicit
-    required property string quality
-    required property string reason
+    property int rowNumber: 0
+    property string trackId: ""
+    property string title: ""
+    property string artistName: ""
+    property string albumTitle: ""
+    property string coverPath: ""
+    property string duration: ""
+    property string quality: ""
+    property string reason: ""
+    property var genres: []
+    property bool liked: false
+    property bool isExplicit: false
 
+    property bool selected: false
+    property bool playingNow: false
     property bool showReason: false
-    property bool interactive: true
-    property bool dimmed: false
-    property bool playingNow: player.hasTrack && player.currentTrack.id === trackId
 
+    property int gap: 12
+    property int colIndex: 40
+    property int colArtist: 160
+    property int colAlbum: 0
+    property int colGenre: 0
+    property int colQuality: 84
+    property int colTime: 52
+
+    signal clicked()
     signal activated()
+    signal likeToggled()
 
-    implicitHeight: 54
-    radius: Theme.radiusSmall
-    color: playingNow ? Theme.accentSoft
-                      : (hover.containsMouse && interactive ? Theme.surfaceHover : "transparent")
-    opacity: dimmed ? 0.55 : 1.0
+    readonly property string genreText: genres && genres.length > 0
+                                        ? genres.slice(0, 2).join(", ") : ""
 
-    Behavior on color {
-        ColorAnimation { duration: Theme.durationFast }
+    implicitHeight: Theme.rowHeight
+    color: selected ? Theme.rowSelected : (hover.hovered ? Theme.rowHover : "transparent")
+
+    Rectangle {
+        anchors.bottom: parent.bottom
+        width: parent.width
+        height: 1
+        color: Theme.border
     }
 
-    MouseArea {
-        id: hover
-        anchors.fill: parent
-        hoverEnabled: true
-        enabled: root.interactive
-        cursorShape: root.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
-        onDoubleClicked: root.activated()
+    // the "this is playing" marker
+    Rectangle {
+        width: 2
+        height: parent.height
+        color: Theme.accent
+        visible: root.playingNow
+    }
+
+    HoverHandler { id: hover }
+    TapHandler {
+        onTapped: root.clicked()
+        onDoubleTapped: root.activated()
     }
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 8
-        anchors.rightMargin: 8
-        spacing: Theme.spacing
+        spacing: root.gap
+
+        Item {
+            Layout.preferredWidth: root.colIndex
+            Layout.fillHeight: true
+
+            Icon {
+                anchors.centerIn: parent
+                visible: root.playingNow
+                glyph: player.playing ? Theme.iVolume : Theme.iPause
+                font.pixelSize: 12
+                color: Theme.accentText
+            }
+            Mono {
+                anchors.centerIn: parent
+                visible: !root.playingNow
+                text: root.rowNumber > 0 ? root.rowNumber : ""
+                color: Theme.faint
+            }
+        }
 
         CoverArt {
-            Layout.preferredWidth: 38
-            Layout.preferredHeight: 38
+            Layout.preferredWidth: 22
+            Layout.preferredHeight: 22
             coverPath: root.coverPath
             title: root.title
         }
 
-        ColumnLayout {
+        RowLayout {
             Layout.fillWidth: true
-            spacing: 1
+            spacing: 8
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 6
+            Text {
+                // With a reason beside it the title keeps its natural width and the
+                // reason takes the rest; otherwise the title takes the lot. Sizing it
+                // from parent.width instead makes the layout recurse.
+                Layout.fillWidth: !(root.showReason && root.reason !== "")
+                text: root.title
+                color: root.playingNow ? Theme.accentText : Theme.text
+                font.family: Theme.sans
+                font.pixelSize: Theme.fontBody
+                font.weight: root.playingNow ? Font.DemiBold : Font.Normal
+                elide: Text.ElideRight
+            }
 
-                Text {
-                    Layout.fillWidth: true
-                    text: root.title
-                    color: root.playingNow ? Theme.accent : Theme.text
-                    font.pixelSize: Theme.fontBody
-                    font.weight: root.playingNow ? Font.DemiBold : Font.Normal
-                    elide: Text.ElideRight
-                }
+            Rectangle {
+                visible: root.isExplicit
+                Layout.preferredWidth: 14
+                Layout.preferredHeight: 14
+                color: "transparent"
+                border.color: Theme.borderStrong
+                border.width: 1
 
-                Rectangle {
-                    visible: root.isExplicit
-                    width: 14; height: 14
-                    radius: 3
-                    color: Theme.surfaceActive
-                    Text {
-                        anchors.centerIn: parent
-                        text: "E"
-                        color: Theme.textMuted
-                        font.pixelSize: 9
-                        font.weight: Font.Bold
-                    }
+                Mono {
+                    anchors.centerIn: parent
+                    text: "E"
+                    font.pixelSize: 9
+                    font.weight: Font.Bold
                 }
             }
 
-            RowLayout {
+            Mono {
                 Layout.fillWidth: true
-                spacing: 6
-
-                Text {
-                    text: root.artistName
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fontTiny
-                    elide: Text.ElideRight
-                    Layout.maximumWidth: root.width * 0.45
-                }
-
-                Text {
-                    visible: root.showReason && root.reason !== ""
-                    text: "· " + root.reason
-                    color: Theme.accent
-                    font.pixelSize: Theme.fontTiny
-                    elide: Text.ElideRight
-                }
-
-                Item { Layout.fillWidth: true }
+                visible: root.showReason && root.reason !== ""
+                text: root.reason
+                color: Theme.faint
+                font.capitalization: Font.MixedCase
+                font.letterSpacing: 0.2
             }
+
         }
 
         Text {
-            visible: root.quality !== "" && hover.containsMouse
+            Layout.preferredWidth: root.colArtist
+            text: root.artistName
+            color: Theme.muted
+            font.family: Theme.sans
+            font.pixelSize: Theme.fontSmall
+            elide: Text.ElideRight
+        }
+
+        Text {
+            visible: root.colAlbum > 0
+            Layout.preferredWidth: root.colAlbum
+            text: root.albumTitle
+            color: Theme.faint
+            font.family: Theme.sans
+            font.pixelSize: Theme.fontSmall
+            elide: Text.ElideRight
+        }
+
+        Mono {
+            visible: root.colGenre > 0
+            Layout.preferredWidth: root.colGenre
+            text: root.genreText
+            color: Theme.faint
+        }
+
+        Mono {
+            Layout.preferredWidth: root.colQuality
             text: root.quality
-            color: Theme.textFaint
-            font.pixelSize: Theme.fontTiny
+            color: Theme.faint
         }
 
-        IconButton {
-            symbol: "♥"
-            size: 28
-            glyphSize: Theme.fontSmall
-            visible: root.interactive && (hover.containsMouse || root.liked)
-            active: root.liked
-            activeColor: Theme.positive
-            tooltip: root.liked ? qsTr("Убрать из избранного") : qsTr("Нравится")
-            onClicked: library.toggleLike(root.trackId)
-        }
-
-        Text {
+        Mono {
+            Layout.preferredWidth: root.colTime
             text: root.duration
-            color: Theme.textFaint
-            font.pixelSize: Theme.fontTiny
-            Layout.preferredWidth: 38
             horizontalAlignment: Text.AlignRight
+            color: Theme.muted
         }
+
+        Item {
+            Layout.preferredWidth: 32
+            Layout.fillHeight: true
+
+            IconButton {
+                anchors.centerIn: parent
+                size: 24
+                glyphSize: 13
+                glyph: root.liked ? Theme.iHeartFill : Theme.iHeart
+                visible: hover.hovered || root.liked || root.selected
+                active: root.liked
+                activeColor: Theme.negative
+                tooltip: root.liked ? qsTr("Убрать из избранного") : qsTr("Нравится")
+                onClicked: root.likeToggled()
+            }
+        }
+
+        Item { Layout.preferredWidth: 4 }
     }
 }

@@ -2,23 +2,18 @@ import QtQuick
 import QtQuick.Controls
 import Wavelane
 
-/*!
-    A round, flat icon button.
-
-    The glyph comes from the font rather than an image asset, so the client has
-    no icon files to ship or scale.
-*/
+/*! A square, flat icon button. */
 Item {
     id: root
 
-    property string symbol: ""
+    property string glyph: ""
     property string tooltip: ""
-    property int size: 34
-    property int glyphSize: Theme.fontBody
-    property color glyphColor: Theme.textMuted
-    property color activeColor: Theme.text
+    property int size: 28
+    property int glyphSize: 14
     property bool active: false
+    property color activeColor: Theme.text
     property bool enabledWhen: true
+    //! Solid white fill with a dark glyph, like the primary segment.
     property bool filled: false
 
     signal clicked()
@@ -29,26 +24,19 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: width / 2
-        color: {
-            if (root.filled)
-                return mouse.containsMouse ? Theme.accentAlt : Theme.accent
-            if (mouse.containsMouse && root.enabledWhen)
-                return Theme.surfaceHover
-            return "transparent"
-        }
-
-        Behavior on color {
-            ColorAnimation { duration: Theme.durationFast }
-        }
+        color: root.filled ? (mouse.containsMouse ? "#ffffff" : Theme.light)
+                           : (mouse.containsMouse && root.enabledWhen ? Theme.rowSelected
+                                                                      : "transparent")
+        border.color: root.filled ? "transparent" : (mouse.containsMouse ? Theme.borderStrong
+                                                                         : "transparent")
+        border.width: 1
     }
 
-    Text {
+    Icon {
         anchors.centerIn: parent
-        text: root.symbol
-        color: root.filled ? "white" : (root.active ? root.activeColor : root.glyphColor)
+        glyph: root.glyph
         font.pixelSize: root.glyphSize
-        font.family: "Segoe UI Symbol"
+        color: root.filled ? Theme.darkOnLight : (root.active ? root.activeColor : Theme.muted)
     }
 
     MouseArea {
@@ -60,7 +48,20 @@ Item {
         onClicked: root.clicked()
     }
 
-    ToolTip.visible: root.tooltip !== "" && mouse.containsMouse
-    ToolTip.text: root.tooltip
-    ToolTip.delay: 400
+    ToolTip {
+        id: tip
+        visible: root.tooltip !== "" && mouse.containsMouse
+        text: root.tooltip
+        delay: 500
+        padding: 6
+        contentItem: Mono {
+            text: tip.text
+            color: Theme.text
+        }
+        background: Rectangle {
+            color: Theme.bar
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+    }
 }

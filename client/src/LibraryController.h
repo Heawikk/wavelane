@@ -28,6 +28,8 @@ class LibraryController : public QObject
     Q_PROPERTY(QString query READ query NOTIFY queryChanged)
     Q_PROPERTY(int trackCount READ trackCount NOTIFY statsChanged)
     Q_PROPERTY(int likedCount READ likedCount NOTIFY statsChanged)
+    //! Full details (including audio features) of the last track asked about.
+    Q_PROPERTY(QVariantMap detail READ detail NOTIFY detailChanged)
 
 public:
     LibraryController(ApiClient *api, Player *player, QObject *parent = nullptr);
@@ -41,6 +43,7 @@ public:
     QString query() const { return m_query; }
     int trackCount() const { return m_trackCount; }
     int likedCount() const { return m_likedCount; }
+    QVariantMap detail() const { return m_detail; }
 
     Q_INVOKABLE void search(const QString &text);
     Q_INVOKABLE void clearSearch();
@@ -57,6 +60,12 @@ public:
 
     Q_INVOKABLE void uploadFiles(const QList<QUrl> &fileUrls);
 
+    //! List endpoints leave the audio features out; this fetches them for one track.
+    Q_INVOKABLE void loadDetail(const QString &trackId);
+
+    //! Skip to the next track of the list playback is walking through.
+    Q_INVOKABLE void playNext();
+
     void clear();
 
 signals:
@@ -66,6 +75,9 @@ signals:
     void queryChanged();
     void statsChanged();
     void notify(const QString &message);
+    void detailChanged();
+    //! A like/dislike changed anywhere; other models mirror it.
+    void reactionChanged(const QString &trackId, bool liked, bool disliked);
 
 private:
     void setSearching(bool searching);
@@ -88,6 +100,9 @@ private:
     QString m_query;
     int m_trackCount = 0;
     int m_likedCount = 0;
+
+    QVariantMap m_detail;
+    QString m_detailId;
 
     //! The list playback is walking through, and where it is.
     TrackListModel *m_activeList = nullptr;

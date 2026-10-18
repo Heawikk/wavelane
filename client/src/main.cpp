@@ -100,6 +100,12 @@ int main(int argc, char *argv[])
     WaveController wave(&api, &player);
     LibraryController library(&api, &player);
 
+    // A like made in any list must show up everywhere the track appears.
+    QObject::connect(&library, &LibraryController::reactionChanged, &wave,
+                     &WaveController::applyReaction);
+    QObject::connect(&library, &LibraryController::reactionChanged, &player,
+                     &Player::applyReaction);
+
     // Signing out must not leave one account's queue visible to the next.
     QObject::connect(&auth, &AuthController::signedInChanged, [&]() {
         if (!auth.signedIn()) {

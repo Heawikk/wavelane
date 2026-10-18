@@ -14,6 +14,9 @@ class TrackListModel : public QAbstractListModel
 
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(bool empty READ isEmpty NOTIFY countChanged)
+    //! Bumped on every change, so a QML binding can depend on "anything in
+    //! this model changed" without watching each row.
+    Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
 
 public:
     enum Roles {
@@ -46,6 +49,7 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     int count() const { return static_cast<int>(m_tracks.size()); }
+    int revision() const { return m_revision; }
     bool isEmpty() const { return m_tracks.isEmpty(); }
     const QList<Track> &tracks() const { return m_tracks; }
 
@@ -55,7 +59,7 @@ public:
     void clear();
 
     Track at(int row) const;
-    int indexOfId(const QString &id) const;
+    Q_INVOKABLE int indexOfId(const QString &id) const;
 
     //! Update the like/dislike flags of one row in place.
     void setReaction(const QString &trackId, bool liked, bool disliked);
@@ -65,7 +69,9 @@ public:
 
 signals:
     void countChanged();
+    void revisionChanged();
 
 private:
     QList<Track> m_tracks;
+    int m_revision = 0;
 };

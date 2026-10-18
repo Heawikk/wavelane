@@ -1,7 +1,7 @@
 import QtQuick
 import Wavelane
 
-/*! A transient message at the bottom of the window. */
+/*! A transient message, bottom centre, in the same flat style as the rest. */
 Item {
     id: root
 
@@ -23,18 +23,23 @@ Item {
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Theme.playerBarHeight + Theme.spacingLarge
+        anchors.bottomMargin: Theme.transportHeight + 90
         width: Math.min(label.implicitWidth + 36, root.width - 80)
-        height: label.implicitHeight + 24
-        radius: Theme.radius
-        color: Theme.surfaceActive
-        border.color: Theme.border
+        height: label.implicitHeight + 22
+        color: Theme.bar
+        border.color: Theme.borderStrong
         border.width: 1
         opacity: 0.0
         visible: opacity > 0.01
 
         Behavior on opacity {
-            NumberAnimation { duration: Theme.durationNormal }
+            NumberAnimation { duration: 160 }
+        }
+
+        Rectangle {
+            width: 2
+            height: parent.height
+            color: Theme.accent
         }
 
         Text {
@@ -42,6 +47,7 @@ Item {
             anchors.centerIn: parent
             width: parent.width - 36
             color: Theme.text
+            font.family: Theme.sans
             font.pixelSize: Theme.fontSmall
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap

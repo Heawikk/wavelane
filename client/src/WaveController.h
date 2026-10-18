@@ -36,6 +36,8 @@ class WaveController : public QObject
     Q_PROPERTY(QString character READ character NOTIFY settingsChanged)
     Q_PROPERTY(QString language READ language NOTIFY settingsChanged)
     Q_PROPERTY(double diversity READ diversity NOTIFY settingsChanged)
+    //! The taste profile as aligned text lines, for the console-style panel.
+    Q_PROPERTY(QStringList profileLines READ profileLines NOTIFY profileChanged)
 
 public:
     WaveController(ApiClient *api, Player *player, QObject *parent = nullptr);
@@ -51,9 +53,14 @@ public:
     QString character() const { return m_character; }
     QString language() const { return m_language; }
     double diversity() const { return m_diversity; }
+    QStringList profileLines() const { return m_profileLines; }
 
     //! Load the saved settings. Call once after signing in.
     Q_INVOKABLE void loadSettings();
+    Q_INVOKABLE void refreshProfile();
+
+    //! Mirror a like/dislike made elsewhere into the queue and history.
+    void applyReaction(const QString &trackId, bool liked, bool disliked);
 
     //! Start (or restart) listening and begin playback.
     Q_INVOKABLE void start();
@@ -77,6 +84,7 @@ signals:
     void statusMessageChanged();
     void currentReasonChanged();
     void settingsChanged();
+    void profileChanged();
     void notify(const QString &message);
 
 private:
@@ -108,4 +116,5 @@ private:
     QString m_character = QStringLiteral("any");
     QString m_language = QStringLiteral("any");
     double m_diversity = 0.3;
+    QStringList m_profileLines;
 };

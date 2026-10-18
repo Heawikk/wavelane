@@ -35,6 +35,8 @@ class Player : public QObject
     Q_PROPERTY(int volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
     Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
+    //! Who started the current track ("wave", "liked", "search", ...).
+    Q_PROPERTY(QString context READ context NOTIFY currentTrackChanged)
 
 public:
     Player(ApiClient *api, Settings *settings, QObject *parent = nullptr);
@@ -73,6 +75,9 @@ public:
      *  entry per track rather than losing the skip.
      */
     void reportAndClear(bool skipped);
+
+    //! Keep the like/dislike flags of the playing track in step with the library.
+    void applyReaction(const QString &trackId, bool liked, bool disliked);
 
 signals:
     void currentTrackChanged();

@@ -57,6 +57,7 @@ QVariantMap Track::toVariantMap() const
         {QStringLiteral("explicit"), explicitContent},
         {QStringLiteral("lossless"), lossless},
         {QStringLiteral("container"), container},
+        {QStringLiteral("quality"), qualityLabel()},
         {QStringLiteral("bitrateKbps"), bitrateKbps},
         {QStringLiteral("playCount"), playCount},
         {QStringLiteral("liked"), liked},
@@ -67,6 +68,15 @@ QVariantMap Track::toVariantMap() const
         {QStringLiteral("reason"), reasonSummary},
         {QStringLiteral("features"), features},
     };
+}
+
+QString Track::qualityLabel() const
+{
+    if (lossless)
+        return container.toUpper();
+    if (bitrateKbps > 0)
+        return QStringLiteral("%1 kbps").arg(bitrateKbps);
+    return container.toUpper();
 }
 
 QString Track::formattedDuration() const

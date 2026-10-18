@@ -3,6 +3,14 @@
 TrackListModel::TrackListModel(QObject *parent)
     : QAbstractListModel(parent)
 {
+    auto bump = [this]() {
+        ++m_revision;
+        emit revisionChanged();
+    };
+    connect(this, &QAbstractItemModel::dataChanged, this, bump);
+    connect(this, &QAbstractItemModel::modelReset, this, bump);
+    connect(this, &QAbstractItemModel::rowsInserted, this, bump);
+    connect(this, &QAbstractItemModel::rowsRemoved, this, bump);
 }
 
 int TrackListModel::rowCount(const QModelIndex &parent) const
@@ -29,12 +37,7 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const
     case DislikedRole:   return track.disliked;
     case ExplicitRole:   return track.explicitContent;
     case LosslessRole:   return track.lossless;
-    case QualityRole:
-        if (track.lossless)
-            return track.container.toUpper();
-        if (track.bitrateKbps > 0)
-            return QStringLiteral("%1 kbps").arg(track.bitrateKbps);
-        return track.container.toUpper();
+    case QualityRole:    return track.qualityLabel();
     case PlayCountRole:  return track.playCount;
     case GenresRole:     return track.genres;
     case ScoreRole:      return track.score;

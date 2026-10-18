@@ -40,16 +40,28 @@ qt_add_qml_module(wavelane
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
-        qml/LoginPage.qml
-        qml/WavePage.qml
-        qml/SearchPage.qml
-        qml/LibraryPage.qml
-        qml/PlayerBar.qml
-        qml/TrackRow.qml
-        qml/CoverArt.qml
-        qml/WaveSettingsPanel.qml
+        qml/Mono.qml
+        qml/Icon.qml
         qml/IconButton.qml
+        qml/FlatButton.qml
+        qml/Segmented.qml
+        qml/FlatCombo.qml
+        qml/FlatScrollBar.qml
+        qml/SectionHeader.qml
+        qml/Kbd.qml
+        qml/CoverArt.qml
         qml/Toast.qml
+        qml/WindowButton.qml
+        qml/ResizeHandles.qml
+        qml/TitleBar.qml
+        qml/LoginPage.qml
+        qml/Workspace.qml
+        qml/SourcesPanel.qml
+        qml/TrackTable.qml
+        qml/TrackRow.qml
+        qml/DetailPanel.qml
+        qml/BottomPanel.qml
+        qml/TransportBar.qml
 )
 
 target_include_directories(wavelane PRIVATE src)

@@ -244,6 +244,15 @@ void Player::handleError(QMediaPlayer::Error error, const QString &message)
     emit playbackFailed(m_errorString);
 }
 
+void Player::applyReaction(const QString &trackId, bool liked, bool disliked)
+{
+    if (!m_current.isValid() || m_current.id != trackId)
+        return;
+    m_current.liked = liked;
+    m_current.disliked = disliked;
+    emit currentTrackChanged();
+}
+
 void Player::reportAndClear(bool skipped)
 {
     if (!m_current.isValid() || m_reported) {

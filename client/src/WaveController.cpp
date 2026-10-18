@@ -4,9 +4,12 @@
 #include "Player.h"
 #include "TrackListModel.h"
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QUrlQuery>
+
+#include <algorithm>
 
 namespace {
 //! Keep at least this many tracks ahead of the one playing.
@@ -118,7 +121,7 @@ void WaveController::fetchBatch(int count, bool autoplay, bool restart)
         query.addQueryItem(QStringLiteral("reset"), QStringLiteral("true"));
 
     m_api->get(QStringLiteral("/wave/next"), query,
-               [this, autoplay](const ApiClient::Response &response) {
+               [this, autoplay, restart](const ApiClient::Response &response) {
                    m_fetchInFlight = false;
                    setLoading(false);
 
@@ -156,7 +159,9 @@ void WaveController::fetchBatch(int count, bool autoplay, bool restart)
 
                    m_queue->append(picks);
 
-                   if (autoplay && !m_player->hasTrack())
+                   // An explicit start takes over from whatever is playing; the
+                   // background refills only play when nothing is.
+                   if (autoplay && (restart || !m_player->hasTrack()))
                        advance(true);
                });
 }
@@ -255,8 +260,11 @@ void WaveController::sendFeedback(const QString &kind, double completion)
 
     m_api->post(QStringLiteral("/wave/feedback"), body,
                 [this](const ApiClient::Response &response) {
-                    if (!response.ok())
+                    if (!response.ok()) {
                         emit notify(tr("Не удалось отправить отзыв: %1").arg(response.error));
+                        return;
+                    }
+                    refreshProfile();
                 });
 }
 
@@ -307,6 +315,97 @@ void WaveController::pushSettings(const QJsonObject &changes)
                    if (m_started)
                        fetchBatch(kBatchSize, !m_player->hasTrack());
                });
+}
+
+void WaveController::applyReaction(const QString &trackId, bool liked, bool disliked)
+{
+    m_queue->setReaction(trackId, liked, disliked);
+    m_history->setReaction(trackId, liked, disliked);
+}
+
+void WaveController::refreshProfile()
+{
+    m_api->get(QStringLiteral("/wave/profile"), [this](const ApiClient::Response &response) {
+        if (!response.ok())
+            return;
+
+        static const QHash<QString, QString> names = {
+            {QStringLiteral("energy"), QStringLiteral("энергия")},
+            {QStringLiteral("valence"), QStringLiteral("настроение")},
+            {QStringLiteral("danceability"), QStringLiteral("танцевальность")},
+            {QStringLiteral("acousticness"), QStringLiteral("акустичность")},
+            {QStringLiteral("instrumentalness"), QStringLiteral("без слов")},
+            {QStringLiteral("brightness"), QStringLiteral("яркость")},
+            {QStringLiteral("loudness"), QStringLiteral("громкость")},
+            {QStringLiteral("dynamics"), QStringLiteral("динамика")},
+            {QStringLiteral("vocalness"), QStringLiteral("вокал")},
+            {QStringLiteral("tempo_norm"), QStringLiteral("темп")},
+        };
+        const QString separator = QStringLiteral("  ·  ");
+
+        auto row = [](const QString &label, const QString &value) {
+            return label.leftJustified(11) + value;
+        };
+        auto signedNumber = [](double value) {
+            return QStringLiteral("%1%2").arg(value >= 0 ? "+" : "").arg(value, 0, 'f', 2);
+        };
+
+        // The features a taste vector leans furthest from neutral say the
+        // most about it, so list those rather than all ten.
+        auto describeVector = [&](const QJsonObject &vector) {
+            QList<QPair<double, QString>> ranked;
+            for (auto it = vector.constBegin(); it != vector.constEnd(); ++it) {
+                const double value = it.value().toDouble();
+                ranked.append({qAbs(value - 0.5),
+                               QStringLiteral("%1 %2")
+                                   .arg(names.value(it.key(), it.key()))
+                                   .arg(value, 0, 'f', 2)});
+            }
+            std::sort(ranked.begin(), ranked.end(),
+                      [](const auto &a, const auto &b) { return a.first > b.first; });
+            QStringList parts;
+            for (qsizetype i = 0; i < qMin<qsizetype>(4, ranked.size()); ++i)
+                parts << ranked.at(i).second;
+            return parts.join(separator);
+        };
+
+        const QJsonObject profile = response.object;
+        QStringList lines;
+        lines << row(QStringLiteral("СОБЫТИЙ"),
+                     QString::number(profile.value(QStringLiteral("event_count")).toInt()));
+        lines << row(QStringLiteral("СТАТУС"),
+                     profile.value(QStringLiteral("is_cold")).toBool()
+                         ? tr("накапливаем данные, волна пока ориентируется на популярное")
+                         : tr("профиль сформирован"));
+
+        QStringList genres;
+        const QJsonArray topGenres = profile.value(QStringLiteral("top_genres")).toArray();
+        for (qsizetype i = 0; i < qMin<qsizetype>(5, topGenres.size()); ++i) {
+            const QJsonObject genre = topGenres.at(i).toObject();
+            genres << QStringLiteral("%1 %2")
+                          .arg(genre.value(QStringLiteral("slug")).toString(),
+                               signedNumber(genre.value(QStringLiteral("affinity")).toDouble()));
+        }
+        lines << row(QStringLiteral("ЖАНРЫ"),
+                     genres.isEmpty() ? QStringLiteral("—") : genres.join(separator));
+
+        QStringList languages;
+        const QJsonObject langs = profile.value(QStringLiteral("languages")).toObject();
+        for (auto it = langs.constBegin(); it != langs.constEnd(); ++it)
+            languages << QStringLiteral("%1 %2").arg(it.key(), signedNumber(it.value().toDouble()));
+        lines << row(QStringLiteral("ЯЗЫКИ"),
+                     languages.isEmpty() ? QStringLiteral("—") : languages.join(separator));
+
+        const QJsonObject positive = profile.value(QStringLiteral("positive")).toObject();
+        if (!positive.isEmpty())
+            lines << row(QStringLiteral("ВКУС"), describeVector(positive));
+        const QJsonObject negative = profile.value(QStringLiteral("negative")).toObject();
+        if (!negative.isEmpty())
+            lines << row(QStringLiteral("ИЗБЕГАЕМ"), describeVector(negative));
+
+        m_profileLines = lines;
+        emit profileChanged();
+    });
 }
 
 void WaveController::clear()
