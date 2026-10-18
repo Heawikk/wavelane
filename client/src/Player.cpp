@@ -3,6 +3,7 @@
 #include "ApiClient.h"
 #include "Settings.h"
 
+#include <QAudioDevice>
 #include <QJsonObject>
 #include <QLoggingCategory>
 
@@ -41,6 +42,20 @@ Player::Player(ApiClient *api, Settings *settings, QObject *parent)
     });
 
     // Set only to reproduce the stall for diagnosis; normally it is repaired.
+    // Headphones plugged in or out, or the default output changed in Windows.
+    // The device list tends to change in bursts, so act once it has settled.
+    m_outputSettle.setSingleShot(true);
+    m_outputSettle.setInterval(400);
+    connect(&m_outputSettle, &QTimer::timeout, this, &Player::followDefaultOutput);
+    m_outputGrace.setSingleShot(true);
+    m_outputGrace.setInterval(4000);
+    connect(&m_devices, &QMediaDevices::audioOutputsChanged, this, [this]() {
+        qCInfo(lcPlayer) << "audio outputs changed; default is"
+                         << QMediaDevices::defaultAudioOutput().description();
+        // Errors raised by the old device going away are not the track's fault.
+        m_outputGrace.start();
+        m_outputSettle.start();
+    });
     m_recoverStalls = !qEnvironmentVariableIsSet("WAVELANE_NO_RECOVER");
     m_watchdog.setInterval(1000);
     connect(&m_watchdog, &QTimer::timeout, this, &Player::checkStall);
@@ -155,6 +170,7 @@ void Player::requestStreamToken(const Track &track)
 void Player::startUrl(const QUrl &url)
 {
     m_currentUrl = url;
+    m_wantPlaying = true;
     m_stalledTicks = 0;
     m_recoveryStage = 0;
     m_watchPosition = -1;
@@ -167,25 +183,32 @@ void Player::togglePlayPause()
 {
     if (!m_current.isValid())
         return;
-    if (playing())
+    if (playing()) {
+        m_wantPlaying = false;
         m_media.pause();
-    else
+    } else {
+        m_wantPlaying = true;
         m_media.play();
+    }
 }
 
 void Player::pause()
 {
+    m_wantPlaying = false;
     m_media.pause();
 }
 
 void Player::resume()
 {
-    if (m_current.isValid())
+    if (m_current.isValid()) {
+        m_wantPlaying = true;
         m_media.play();
+    }
 }
 
 void Player::stop()
 {
+    m_wantPlaying = false;
     reportAndClear(true);
     m_media.stop();
     m_media.setSource(QUrl());
@@ -256,6 +279,14 @@ void Player::handleError(QMediaPlayer::Error error, const QString &message)
 {
     if (error == QMediaPlayer::NoError)
         return;
+
+    if (m_outputGrace.isActive() && m_current.isValid()) {
+        // The device the stream was going to just changed or vanished. Carry on
+        // from the same place instead of reporting the track as broken.
+        qCWarning(lcPlayer) << "error while the output changed, recovering:" << error << message;
+        QTimer::singleShot(0, this, &Player::recoverAfterOutputChange);
+        return;
+    }
     setBuffering(false);
     setErrorString(message.isEmpty() ? tr("Playback error") : message);
     qCWarning(lcPlayer) << "playback error" << error << message;
@@ -374,6 +405,46 @@ void Player::checkStall()
         emit playbackFailed(m_errorString);
         break;
     }
+}
+
+void Player::followDefaultOutput()
+{
+    const QAudioDevice target = QMediaDevices::defaultAudioOutput();
+    if (target.isNull()) {
+        // Nothing to play to for now; the next change of the device list retries.
+        qCWarning(lcPlayer) << "no audio output available";
+        return;
+    }
+
+    if (target.id() != m_audio.device().id()) {
+        qCInfo(lcPlayer) << "switching output to" << target.description() << "at"
+                         << m_media.position();
+        m_audio.setDevice(target);
+    }
+
+    // Give the backend a moment to move the stream, then make sure it is alive.
+    QTimer::singleShot(700, this, &Player::recoverAfterOutputChange);
+}
+
+void Player::recoverAfterOutputChange()
+{
+    if (!m_wantPlaying || !m_current.isValid() || m_currentUrl.isEmpty())
+        return;
+    // A track that has simply ended is not something to bring back.
+    if (m_media.mediaStatus() == QMediaPlayer::EndOfMedia)
+        return;
+
+    const bool alive = playing() && m_media.error() == QMediaPlayer::NoError
+                       && m_media.mediaStatus() != QMediaPlayer::InvalidMedia;
+    if (alive)
+        return;
+
+    qCWarning(lcPlayer) << "playback did not survive the output change; resuming at"
+                        << m_position;
+    const qint64 position = m_position;
+    m_media.setSource(m_currentUrl);
+    m_media.setPosition(position);
+    m_media.play();
 }
 
 void Player::setBuffering(bool buffering)

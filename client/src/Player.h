@@ -4,6 +4,7 @@
 #include "Track.h"
 
 #include <QAudioOutput>
+#include <QMediaDevices>
 #include <QMediaPlayer>
 #include <QObject>
 #include <QTimer>
@@ -114,6 +115,8 @@ private:
     void requestStreamToken(const Track &track);
     void reportPlay(const Track &track, qint64 msPlayed, bool completed, bool skipped);
     void checkStall();
+    void followDefaultOutput();
+    void recoverAfterOutputChange();
     void setBuffering(bool buffering);
     void setErrorString(const QString &message);
 
@@ -122,6 +125,16 @@ private:
     QMediaPlayer m_media;
     QAudioOutput m_audio;
     AudioTap *m_tap = nullptr;
+
+    // --- output device ---
+    // Qt keeps playing to the device that was the default when playback began;
+    // it does not follow a change of default, and a device that disappears
+    // takes the stream down with it. So the player follows the default itself.
+    QMediaDevices m_devices;
+    QTimer m_outputSettle;
+    QTimer m_outputGrace;
+    //! The listener has not paused: playback should continue across a device change.
+    bool m_wantPlaying = false;
 
     Track m_current;
     QString m_context;
