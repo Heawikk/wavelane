@@ -21,6 +21,7 @@ Player::Player(ApiClient *api, Settings *settings, QObject *parent)
     , m_settings(settings)
 {
     m_media.setAudioOutput(&m_audio);
+    m_tap = new AudioTap(&m_media, !qEnvironmentVariableIsSet("WAVELANE_NO_TAP"), this);
 
     if (m_settings) {
         m_audio.setVolume(static_cast<float>(m_settings->volume()) / 100.0f);
@@ -31,11 +32,19 @@ Player::Player(ApiClient *api, Settings *settings, QObject *parent)
     connect(&m_media, &QMediaPlayer::positionChanged, this, &Player::handlePositionChanged);
     connect(&m_media, &QMediaPlayer::errorOccurred, this, &Player::handleError);
     connect(&m_media, &QMediaPlayer::playbackStateChanged, this, [this]() {
+        qCInfo(lcPlayer) << "state" << m_media.playbackState() << "pos" << m_media.position()
+                         << "track" << m_current.title;
         emit playingChanged();
     });
     connect(&m_media, &QMediaPlayer::durationChanged, this, [this]() {
         emit durationChanged();
     });
+
+    // Set only to reproduce the stall for diagnosis; normally it is repaired.
+    m_recoverStalls = !qEnvironmentVariableIsSet("WAVELANE_NO_RECOVER");
+    m_watchdog.setInterval(1000);
+    connect(&m_watchdog, &QTimer::timeout, this, &Player::checkStall);
+    m_watchdog.start();
 }
 
 bool Player::playing() const
@@ -145,6 +154,10 @@ void Player::requestStreamToken(const Track &track)
 
 void Player::startUrl(const QUrl &url)
 {
+    m_currentUrl = url;
+    m_stalledTicks = 0;
+    m_recoveryStage = 0;
+    m_watchPosition = -1;
     setBuffering(true);
     m_media.setSource(url);
     m_media.play();
@@ -176,6 +189,7 @@ void Player::stop()
     reportAndClear(true);
     m_media.stop();
     m_media.setSource(QUrl());
+    m_tap->reset();
 }
 
 void Player::seek(qint64 milliseconds)
@@ -205,6 +219,8 @@ void Player::handlePositionChanged(qint64 position)
 
 void Player::handleMediaStatus(QMediaPlayer::MediaStatus status)
 {
+    qCInfo(lcPlayer) << "status" << status << "state" << m_media.playbackState() << "pos"
+                     << m_media.position() << "track" << m_current.title;
     switch (status) {
     case QMediaPlayer::LoadingMedia:
     case QMediaPlayer::StalledMedia:
@@ -308,6 +324,54 @@ void Player::reportPlay(const Track &track, qint64 msPlayed, bool completed, boo
                     if (!response.ok())
                         qCWarning(lcPlayer) << "play report failed:" << response.error;
                 });
+}
+
+void Player::checkStall()
+{
+    if (!playing() || !m_current.isValid()) {
+        m_stalledTicks = 0;
+        m_watchPosition = -1;
+        return;
+    }
+
+    const qint64 position = m_media.position();
+    qCInfo(lcPlayer) << "tick" << m_current.title << "pos" << position << "status"
+                     << m_media.mediaStatus() << "buffer" << m_media.bufferProgress();
+
+    if (position != m_watchPosition) {
+        m_watchPosition = position;
+        m_stalledTicks = 0;
+        m_recoveryStage = 0;
+        return;
+    }
+
+    if (++m_stalledTicks < 3)
+        return;
+    m_stalledTicks = 0;
+
+    qCWarning(lcPlayer) << "STALL: position stuck at" << position << "status"
+                        << m_media.mediaStatus() << "stage" << m_recoveryStage
+                        << "track" << m_current.title;
+    if (!m_recoverStalls)
+        return;
+
+    switch (m_recoveryStage++) {
+    case 0:
+        // Seeking is what frees it by hand, so try exactly that first.
+        m_media.setPosition(position + 1);
+        break;
+    case 1:
+        // Still stuck: start the stream over from where it was.
+        m_media.setSource(m_currentUrl);
+        m_media.setPosition(position);
+        m_media.play();
+        break;
+    default:
+        // Give up on this track rather than sit in silence.
+        setErrorString(tr("Трек перестал воспроизводиться"));
+        emit playbackFailed(m_errorString);
+        break;
+    }
 }
 
 void Player::setBuffering(bool buffering)

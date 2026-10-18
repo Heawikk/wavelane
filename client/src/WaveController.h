@@ -91,7 +91,7 @@ signals:
     void notify(const QString &message);
 
 private:
-    void fetchBatch(int count, bool autoplay, bool restart = false);
+    void fetchBatch(int count, bool autoplay, bool restart = false, bool takeOver = false);
     void applySettings(const QJsonObject &object);
     void pushSettings(const QJsonObject &changes);
     void sendFeedback(const QString &kind, double completion = -1.0);
@@ -112,6 +112,9 @@ private:
     bool m_loading = false;
     bool m_started = false;
     bool m_fetchInFlight = false;
+    //! Bumped whenever the wave is redirected (start, changed settings). A
+    //! reply that was asked for under an older value is out of date and dropped.
+    int m_generation = 0;
     QString m_statusMessage;
     QString m_currentReason;
 

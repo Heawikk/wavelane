@@ -14,6 +14,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     QuickControls2
     Network
     Multimedia
+    ShaderTools
 )
 
 qt_standard_project_setup(REQUIRES 6.5)
@@ -25,6 +26,7 @@ qt_add_executable(wavelane
     src/AuthController.h     src/AuthController.cpp
     src/Track.h              src/Track.cpp
     src/TrackListModel.h     src/TrackListModel.cpp
+    src/AudioTap.h           src/AudioTap.cpp
     src/Player.h             src/Player.cpp
     src/WaveController.h     src/WaveController.cpp
     src/LibraryController.h  src/LibraryController.cpp
@@ -68,6 +70,16 @@ qt_add_qml_module(wavelane
         qml/ConfirmDialog.qml
         qml/ConflictDialog.qml
         qml/ImportBanner.qml
+        qml/VibeBackground.qml
+        qml/Equalizer.qml
+)
+
+# Compiled for every graphics backend Qt supports, so the same file runs on
+# Direct3D, Vulkan, Metal and OpenGL.
+qt_add_shaders(wavelane "wavelane_shaders"
+    PREFIX "/shaders"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/qml/shaders"
+    FILES qml/shaders/vibe.frag
 )
 
 target_include_directories(wavelane PRIVATE src)

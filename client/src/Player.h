@@ -1,10 +1,13 @@
 #pragma once
 
+#include "AudioTap.h"
 #include "Track.h"
 
 #include <QAudioOutput>
 #include <QMediaPlayer>
 #include <QObject>
+#include <QTimer>
+#include <QUrl>
 #include <QVariantMap>
 #include <qqmlintegration.h>
 
@@ -37,6 +40,8 @@ class Player : public QObject
     Q_PROPERTY(QString errorString READ errorString NOTIFY errorStringChanged)
     //! Who started the current track ("wave", "liked", "search", ...).
     Q_PROPERTY(QString context READ context NOTIFY currentTrackChanged)
+    //! Loudness and spectrum of what is playing, for the animation.
+    Q_PROPERTY(AudioTap *spectrum READ spectrum CONSTANT)
 
 public:
     Player(ApiClient *api, Settings *settings, QObject *parent = nullptr);
@@ -47,6 +52,7 @@ public:
     //! Who started the current track ("wave", "liked", "search", ...). Lets each
     //! controller advance only the playback it owns.
     QString context() const { return m_context; }
+    AudioTap *spectrum() const { return m_tap; }
     bool playing() const;
     bool buffering() const { return m_buffering; }
     qint64 position() const { return m_position; }
@@ -105,6 +111,7 @@ private:
     void startUrl(const QUrl &url);
     void requestStreamToken(const Track &track);
     void reportPlay(const Track &track, qint64 msPlayed, bool completed, bool skipped);
+    void checkStall();
     void setBuffering(bool buffering);
     void setErrorString(const QString &message);
 
@@ -112,6 +119,7 @@ private:
     Settings *m_settings = nullptr;
     QMediaPlayer m_media;
     QAudioOutput m_audio;
+    AudioTap *m_tap = nullptr;
 
     Track m_current;
     QString m_context;
@@ -124,4 +132,12 @@ private:
     bool m_nearEndEmitted = false;
     bool m_autoPlayPending = false;
     QString m_errorString;
+
+    // --- stall watchdog ---
+    QTimer m_watchdog;
+    QUrl m_currentUrl;
+    qint64 m_watchPosition = -1;
+    int m_stalledTicks = 0;
+    int m_recoveryStage = 0;
+    bool m_recoverStalls = true;
 };

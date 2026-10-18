@@ -89,6 +89,8 @@ void WaveController::applySettings(const QJsonObject &object)
 
 void WaveController::start()
 {
+    ++m_generation;
+    m_fetchInFlight = false;
     m_queue->clear();
     setStatusMessage({});
     m_started = true;
@@ -108,11 +110,12 @@ void WaveController::reset()
     });
 }
 
-void WaveController::fetchBatch(int count, bool autoplay, bool restart)
+void WaveController::fetchBatch(int count, bool autoplay, bool restart, bool takeOver)
 {
     if (m_fetchInFlight)
         return;
     m_fetchInFlight = true;
+    const int generation = m_generation;
     setLoading(true);
 
     QUrlQuery query;
@@ -121,7 +124,11 @@ void WaveController::fetchBatch(int count, bool autoplay, bool restart)
         query.addQueryItem(QStringLiteral("reset"), QStringLiteral("true"));
 
     m_api->get(QStringLiteral("/wave/next"), query,
-               [this, autoplay, restart](const ApiClient::Response &response) {
+               [this, autoplay, restart, takeOver, generation](const ApiClient::Response &response) {
+                   // Asked for before the settings changed or the wave restarted:
+                   // its picks were chosen for something the listener has left.
+                   if (generation != m_generation)
+                       return;
                    m_fetchInFlight = false;
                    setLoading(false);
 
@@ -161,7 +168,7 @@ void WaveController::fetchBatch(int count, bool autoplay, bool restart)
 
                    // An explicit start takes over from whatever is playing; the
                    // background refills only play when nothing is.
-                   if (autoplay && (restart || !m_player->hasTrack()))
+                   if (autoplay && (restart || takeOver || !m_player->hasTrack()))
                        advance(true);
                });
 }
@@ -310,10 +317,22 @@ void WaveController::pushSettings(const QJsonObject &changes)
                    applySettings(response.object);
 
                    // The server starts a new session when the settings change,
-                   // so anything already queued belongs to the old one.
+                   // so anything already queued belongs to the old one — and so
+                   // does whatever is playing right now.
+                   ++m_generation;
+                   m_fetchInFlight = false;
                    m_queue->clear();
-                   if (m_started)
-                       fetchBatch(kBatchSize, !m_player->hasTrack());
+                   if (!m_started)
+                       return;
+
+                   // Turning a dial is an instruction to hear something else, so
+                   // the track on the air is replaced at once rather than being
+                   // left to finish. A track from the library is none of the
+                   // wave's business, so that one is left alone.
+                   const bool waveIsPlaying =
+                       m_player->hasTrack() && m_player->context() == QLatin1String("wave");
+                   fetchBatch(kBatchSize, waveIsPlaying || !m_player->hasTrack(), false,
+                              waveIsPlaying);
                });
 }
 
