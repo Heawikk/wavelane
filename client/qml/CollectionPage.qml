@@ -15,6 +15,7 @@ Item {
     property int tab: 0
 
     signal toggleDetail()
+    signal showConflicts()
 
     readonly property var tabs: [
         { value: "0", label: qsTr("Избранное") },
@@ -24,6 +25,7 @@ Item {
     ]
 
     function openUpload() { fileDialog.open() }
+    function openImport() { folderDialog.open() }
 
     function refresh() {
         if (tab === 0)
@@ -47,6 +49,12 @@ Item {
         onAccepted: library.uploadFiles(selectedFiles)
     }
 
+    FolderDialog {
+        id: folderDialog
+        title: qsTr("Выберите папку с музыкой")
+        onAccepted: library.importFolder(selectedFolder)
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -64,10 +72,26 @@ Item {
                 color: library.uploading ? Theme.accentText : Theme.muted
                 rightPadding: 8
             }
+            // Adding music is for administrators; everyone else just listens.
             FlatButton {
+                visible: auth.isAdmin && library.conflicts.length > 0
+                implicitHeight: 26
+                text: qsTr("Конфликты: %1").arg(library.conflicts.length)
+                onClicked: root.showConflicts()
+            }
+            FlatButton {
+                visible: auth.isAdmin
+                implicitHeight: 26
+                glyph: Theme.iFolder
+                text: qsTr("Импорт папки")
+                enabledWhen: !library.importActive
+                onClicked: root.openImport()
+            }
+            FlatButton {
+                visible: auth.isAdmin
                 implicitHeight: 26
                 glyph: Theme.iAdd
-                text: library.uploading ? qsTr("Загрузка…") : qsTr("Загрузить музыку")
+                text: library.uploading ? qsTr("Загрузка…") : qsTr("Загрузить файлы")
                 enabledWhen: !library.uploading
                 onClicked: root.openUpload()
             }
@@ -109,6 +133,11 @@ Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 1
             color: Theme.border
+        }
+
+        ImportBanner {
+            Layout.fillWidth: true
+            onShowConflicts: root.showConflicts()
         }
 
         Item {

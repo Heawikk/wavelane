@@ -62,6 +62,9 @@ public:
     //! Mirror a like/dislike made elsewhere into the queue and history.
     void applyReaction(const QString &trackId, bool liked, bool disliked);
 
+    //! Drop deleted tracks from the queue and history.
+    void removeTracks(const QStringList &trackIds);
+
     //! Start (or restart) listening and begin playback.
     Q_INVOKABLE void start();
     Q_INVOKABLE void playNext();

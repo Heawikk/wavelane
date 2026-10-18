@@ -79,6 +79,9 @@ public:
     //! Keep the like/dislike flags of the playing track in step with the library.
     void applyReaction(const QString &trackId, bool liked, bool disliked);
 
+    //! Stop and forget the current track if it was just deleted from the library.
+    void dropIfDeleted(const QStringList &trackIds);
+
 signals:
     void currentTrackChanged();
     void playingChanged();

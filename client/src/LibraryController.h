@@ -7,7 +7,9 @@
 
 #include <QObject>
 #include <QString>
+#include <QTimer>
 #include <QUrl>
+#include <QVariantList>
 #include <qqmlintegration.h>
 
 class ApiClient;
@@ -30,6 +32,12 @@ class LibraryController : public QObject
     Q_PROPERTY(int likedCount READ likedCount NOTIFY statsChanged)
     //! Full details (including audio features) of the last track asked about.
     Q_PROPERTY(QVariantMap detail READ detail NOTIFY detailChanged)
+    //! The running or just-finished folder import; empty when there is none.
+    Q_PROPERTY(QVariantMap importJob READ importJob NOTIFY importChanged)
+    Q_PROPERTY(bool importActive READ importActive NOTIFY importChanged)
+    Q_PROPERTY(double importFraction READ importFraction NOTIFY importChanged)
+    //! Files waiting for an "old or new?" answer.
+    Q_PROPERTY(QVariantList conflicts READ conflicts NOTIFY conflictsChanged)
 
 public:
     LibraryController(ApiClient *api, Player *player, QObject *parent = nullptr);
@@ -44,6 +52,10 @@ public:
     int trackCount() const { return m_trackCount; }
     int likedCount() const { return m_likedCount; }
     QVariantMap detail() const { return m_detail; }
+    QVariantMap importJob() const { return m_importJob; }
+    bool importActive() const;
+    double importFraction() const;
+    QVariantList conflicts() const { return m_conflicts; }
 
     Q_INVOKABLE void search(const QString &text);
     Q_INVOKABLE void clearSearch();
@@ -63,6 +75,19 @@ public:
     //! List endpoints leave the audio features out; this fetches them for one track.
     Q_INVOKABLE void loadDetail(const QString &trackId);
 
+    //! Import every audio file under a folder on the server, in the background.
+    Q_INVOKABLE void importFolder(const QUrl &folder);
+    Q_INVOKABLE void cancelImport();
+    Q_INVOKABLE void dismissImport();
+    //! Pick up an import that was already running when the app started.
+    Q_INVOKABLE void restoreImport();
+
+    Q_INVOKABLE void loadConflicts();
+    //! [{ id, action }] where action is "keep_old" or "replace".
+    Q_INVOKABLE void resolveConflicts(const QVariantList &resolutions);
+
+    Q_INVOKABLE void deleteTracks(const QStringList &trackIds);
+
     //! Skip to the next track of the list playback is walking through.
     Q_INVOKABLE void playNext();
 
@@ -76,6 +101,12 @@ signals:
     void statsChanged();
     void notify(const QString &message);
     void detailChanged();
+    void importChanged();
+    void conflictsChanged();
+    //! New conflicts appeared; the UI should ask about them.
+    void conflictsFound();
+    //! Tracks were deleted; other views must forget them.
+    void tracksDeleted(const QStringList &trackIds);
     //! A like/dislike changed anywhere; other models mirror it.
     void reactionChanged(const QString &trackId, bool liked, bool disliked);
 
@@ -86,6 +117,9 @@ private:
     void setReaction(const QString &trackId, const QString &kind);
     void advanceWithinList();
     bool ownsPlayback() const;
+    void pollImport();
+    void applyImportJob(const QVariantMap &job);
+    void finishImport();
     static QList<Track> parseTracks(const QJsonArray &array);
 
     ApiClient *m_api = nullptr;
@@ -103,6 +137,12 @@ private:
 
     QVariantMap m_detail;
     QString m_detailId;
+
+    QVariantMap m_importJob;
+    QString m_importId;
+    QTimer m_importTimer;
+    bool m_importReported = false;
+    QVariantList m_conflicts;
 
     //! The list playback is walking through, and where it is.
     TrackListModel *m_activeList = nullptr;

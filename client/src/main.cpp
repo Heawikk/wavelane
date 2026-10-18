@@ -106,6 +106,12 @@ int main(int argc, char *argv[])
     QObject::connect(&library, &LibraryController::reactionChanged, &player,
                      &Player::applyReaction);
 
+    // Deleted tracks must vanish from the queue, the history and the player.
+    QObject::connect(&library, &LibraryController::tracksDeleted, &wave,
+                     &WaveController::removeTracks);
+    QObject::connect(&library, &LibraryController::tracksDeleted, &player,
+                     &Player::dropIfDeleted);
+
     // Signing out must not leave one account's queue visible to the next.
     QObject::connect(&auth, &AuthController::signedInChanged, [&]() {
         if (!auth.signedIn()) {

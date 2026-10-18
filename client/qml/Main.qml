@@ -46,6 +46,7 @@ ApplicationWindow {
     Connections {
         target: library
         function onNotify(message) { toast.show(message) }
+        function onConflictsFound() { conflictDialog.open() }
     }
     Connections {
         target: player
@@ -61,6 +62,11 @@ ApplicationWindow {
                 library.loadCatalogue()
                 library.loadLiked()
                 wave.refreshProfile()
+                if (auth.isAdmin) {
+                    // an import may have been left running, and answers may be pending
+                    library.restoreImport()
+                    library.loadConflicts()
+                }
             }
         }
     }
@@ -75,7 +81,7 @@ ApplicationWindow {
         }
     }
     Shortcut {
-        enabled: auth.signedIn
+        enabled: auth.signedIn && auth.isAdmin
         sequences: ["Ctrl+U"]
         onActivated: {
             window.showPage("collection")
@@ -188,6 +194,7 @@ ApplicationWindow {
                             id: collectionPage
                             detailOpen: window.detailOpen
                             onToggleDetail: window.detailOpen = !window.detailOpen
+                            onShowConflicts: conflictDialog.open()
                         }
                     }
                 }
@@ -211,6 +218,8 @@ ApplicationWindow {
     }
 
     ResizeHandles { window: window }
+
+    ConflictDialog { id: conflictDialog }
 
     Toast { id: toast }
 }

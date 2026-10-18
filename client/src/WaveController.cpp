@@ -323,6 +323,14 @@ void WaveController::applyReaction(const QString &trackId, bool liked, bool disl
     m_history->setReaction(trackId, liked, disliked);
 }
 
+void WaveController::removeTracks(const QStringList &trackIds)
+{
+    for (const QString &id : trackIds) {
+        m_queue->removeId(id);
+        m_history->removeId(id);
+    }
+}
+
 void WaveController::refreshProfile()
 {
     m_api->get(QStringLiteral("/wave/profile"), [this](const ApiClient::Response &response) {

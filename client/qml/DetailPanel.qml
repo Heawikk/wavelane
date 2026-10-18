@@ -18,6 +18,7 @@ Rectangle {
     property bool canPlay: true
 
     signal playRequested()
+    signal deleteRequested()
 
     color: Theme.panel
 
@@ -286,6 +287,18 @@ Rectangle {
                         tooltip: qsTr("Не нравится — больше не покажем")
                         onClicked: root.isPlaying && player.context === "wave"
                                    ? wave.dislike() : library.toggleDislike(root.track.id)
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // removing music from the library is for administrators
+                    IconButton {
+                        visible: auth.isAdmin
+                        size: 30
+                        glyph: Theme.iDelete
+                        activeColor: Theme.negative
+                        tooltip: qsTr("Удалить из библиотеки · Del")
+                        onClicked: root.deleteRequested()
                     }
                 }
 

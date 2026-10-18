@@ -20,6 +20,9 @@ LibraryController::LibraryController(ApiClient *api, Player *player, QObject *pa
         if (ownsPlayback())
             advanceWithinList();
     });
+
+    m_importTimer.setInterval(1000);
+    connect(&m_importTimer, &QTimer::timeout, this, &LibraryController::pollImport);
 }
 
 bool LibraryController::ownsPlayback() const
@@ -222,6 +225,221 @@ void LibraryController::playNext()
     advanceWithinList();
 }
 
+bool LibraryController::importActive() const
+{
+    const QString state = m_importJob.value(QStringLiteral("state")).toString();
+    return !state.isEmpty() && state != QLatin1String("done")
+           && state != QLatin1String("cancelled") && state != QLatin1String("failed");
+}
+
+double LibraryController::importFraction() const
+{
+    const int total = m_importJob.value(QStringLiteral("total")).toInt();
+    if (total <= 0)
+        return 0.0;
+    return qBound(0.0, static_cast<double>(m_importJob.value(QStringLiteral("processed")).toInt())
+                           / static_cast<double>(total), 1.0);
+}
+
+void LibraryController::importFolder(const QUrl &folder)
+{
+    const QString path = folder.isLocalFile() ? folder.toLocalFile() : folder.toString();
+    if (path.isEmpty())
+        return;
+
+    QJsonObject body{
+        {QStringLiteral("path"), path},
+        {QStringLiteral("recursive"), true},
+        {QStringLiteral("analyze"), true},
+    };
+    m_api->post(QStringLiteral("/admin/imports"), body, [this](const ApiClient::Response &response) {
+        if (!response.ok()) {
+            emit notify(response.error);
+            return;
+        }
+        m_importReported = false;
+        m_importId = response.object.value(QStringLiteral("id")).toString();
+        applyImportJob(response.object.toVariantMap());
+        m_importTimer.start();
+        emit notify(tr("Импорт начался. Его можно оставить работать в фоне."));
+    });
+}
+
+void LibraryController::cancelImport()
+{
+    if (m_importId.isEmpty())
+        return;
+    m_api->post(QStringLiteral("/admin/imports/%1/cancel").arg(m_importId), {},
+                [this](const ApiClient::Response &response) {
+                    if (response.ok())
+                        applyImportJob(response.object.toVariantMap());
+                });
+}
+
+void LibraryController::dismissImport()
+{
+    if (importActive())
+        return;
+    m_importTimer.stop();
+    m_importJob.clear();
+    m_importId.clear();
+    emit importChanged();
+}
+
+void LibraryController::restoreImport()
+{
+    m_api->get(QStringLiteral("/admin/imports"), [this](const ApiClient::Response &response) {
+        if (!response.ok() || response.array.isEmpty())
+            return;
+        const QJsonObject newest = response.array.first().toObject();
+        const QString state = newest.value(QStringLiteral("state")).toString();
+        // Only adopt one that is still going; an old finished import is history.
+        if (state != QLatin1String("scanning") && state != QLatin1String("running"))
+            return;
+        m_importReported = false;
+        m_importId = newest.value(QStringLiteral("id")).toString();
+        applyImportJob(newest.toVariantMap());
+        m_importTimer.start();
+    });
+}
+
+void LibraryController::pollImport()
+{
+    if (m_importId.isEmpty())
+        return;
+    const QString id = m_importId;
+    m_api->get(QStringLiteral("/admin/imports/%1").arg(id),
+               [this, id](const ApiClient::Response &response) {
+                   // A transient failure just means we ask again a second later.
+                   if (!response.ok() || id != m_importId)
+                       return;
+                   applyImportJob(response.object.toVariantMap());
+               });
+}
+
+void LibraryController::applyImportJob(const QVariantMap &job)
+{
+    m_importJob = job;
+    emit importChanged();
+    if (!importActive())
+        finishImport();
+}
+
+void LibraryController::finishImport()
+{
+    m_importTimer.stop();
+    if (m_importReported)
+        return;
+    m_importReported = true;
+
+    const int imported = m_importJob.value(QStringLiteral("imported")).toInt();
+    const int duplicates = m_importJob.value(QStringLiteral("duplicates")).toInt();
+    const int conflicts = m_importJob.value(QStringLiteral("conflicts")).toInt();
+    const int failed = m_importJob.value(QStringLiteral("failed")).toInt();
+    const bool cancelled = m_importJob.value(QStringLiteral("state")).toString()
+                           == QLatin1String("cancelled");
+
+    QStringList parts{tr("добавлено: %1").arg(imported)};
+    if (duplicates > 0)
+        parts << tr("уже было: %1").arg(duplicates);
+    if (conflicts > 0)
+        parts << tr("конфликтов: %1").arg(conflicts);
+    if (failed > 0)
+        parts << tr("с ошибкой: %1").arg(failed);
+    emit notify((cancelled ? tr("Импорт остановлен: ") : tr("Импорт завершён: "))
+                + parts.join(QStringLiteral(", ")));
+
+    loadCatalogue();
+    loadStats();
+    if (conflicts > 0)
+        loadConflicts();
+}
+
+void LibraryController::loadConflicts()
+{
+    m_api->get(QStringLiteral("/imports/conflicts"), [this](const ApiClient::Response &response) {
+        if (!response.ok())
+            return;
+        const bool hadAny = !m_conflicts.isEmpty();
+        m_conflicts = response.array.toVariantList();
+        emit conflictsChanged();
+        if (!m_conflicts.isEmpty() && !hadAny)
+            emit conflictsFound();
+    });
+}
+
+void LibraryController::resolveConflicts(const QVariantList &resolutions)
+{
+    QJsonArray items;
+    for (const QVariant &entry : resolutions) {
+        const QVariantMap map = entry.toMap();
+        items.append(QJsonObject{
+            {QStringLiteral("conflict_id"), map.value(QStringLiteral("id")).toString()},
+            {QStringLiteral("action"), map.value(QStringLiteral("action")).toString()},
+        });
+    }
+    if (items.isEmpty())
+        return;
+
+    m_api->post(QStringLiteral("/imports/conflicts/resolve"),
+                QJsonObject{{QStringLiteral("resolutions"), items}},
+                [this](const ApiClient::Response &response) {
+                    if (!response.ok()) {
+                        emit notify(response.error);
+                        return;
+                    }
+                    const int replaced = response.object.value(QStringLiteral("replaced")).toInt();
+                    const int kept = response.object.value(QStringLiteral("kept_old")).toInt();
+                    QStringList parts;
+                    if (replaced > 0)
+                        parts << tr("заменено: %1").arg(replaced);
+                    if (kept > 0)
+                        parts << tr("оставлено старых: %1").arg(kept);
+                    if (!parts.isEmpty())
+                        emit notify(parts.join(QStringLiteral(", ")));
+
+                    // A replaced file changes a track's length and quality.
+                    m_detailId.clear();
+                    loadConflicts();
+                    loadCatalogue();
+                    loadStats();
+                });
+}
+
+void LibraryController::deleteTracks(const QStringList &trackIds)
+{
+    if (trackIds.isEmpty())
+        return;
+
+    QJsonArray ids;
+    for (const QString &id : trackIds)
+        ids.append(id);
+
+    m_api->post(QStringLiteral("/tracks/bulk-delete"),
+                QJsonObject{{QStringLiteral("track_ids"), ids}},
+                [this, trackIds](const ApiClient::Response &response) {
+                    if (!response.ok()) {
+                        emit notify(response.error);
+                        return;
+                    }
+                    for (const QString &id : trackIds) {
+                        m_searchResults->removeId(id);
+                        m_liked->removeId(id);
+                        m_catalogue->removeId(id);
+                    }
+                    if (trackIds.contains(m_detailId)) {
+                        m_detailId.clear();
+                        m_detail.clear();
+                        emit detailChanged();
+                    }
+                    emit tracksDeleted(trackIds);
+                    emit notify(tr("Удалено треков: %1")
+                                    .arg(response.object.value(QStringLiteral("deleted")).toInt()));
+                    loadStats();
+                    loadCatalogue();
+                });
+}
+
 void LibraryController::advanceWithinList()
 {
     if (!m_activeList)
@@ -262,12 +480,15 @@ void LibraryController::uploadFiles(const QList<QUrl> &fileUrls)
         const int uploaded = response.object.value(QStringLiteral("uploaded")).toInt();
         const int duplicates = response.object.value(QStringLiteral("duplicates")).toInt();
         const int failed = response.object.value(QStringLiteral("failed")).toInt();
+        const int conflicts = response.object.value(QStringLiteral("conflicts")).toInt();
 
         QStringList parts;
         if (uploaded > 0)
             parts << tr("добавлено: %1").arg(uploaded);
         if (duplicates > 0)
             parts << tr("уже было: %1").arg(duplicates);
+        if (conflicts > 0)
+            parts << tr("конфликтов: %1").arg(conflicts);
         if (failed > 0)
             parts << tr("с ошибкой: %1").arg(failed);
 
@@ -291,6 +512,8 @@ void LibraryController::uploadFiles(const QList<QUrl> &fileUrls)
 
         loadCatalogue();
         loadStats();
+        if (conflicts > 0)
+            loadConflicts();
     });
 }
 
@@ -301,6 +524,12 @@ void LibraryController::clear()
     m_catalogue->clear();
     m_activeList = nullptr;
     m_activeRow = -1;
+    m_importTimer.stop();
+    m_importJob.clear();
+    m_importId.clear();
+    m_conflicts.clear();
+    emit importChanged();
+    emit conflictsChanged();
     m_query.clear();
     m_trackCount = 0;
     m_likedCount = 0;

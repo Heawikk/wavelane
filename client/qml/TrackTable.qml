@@ -25,6 +25,7 @@ Item {
     property string selectedId: ""
 
     signal trackSelected(string trackId)
+    signal deleteRequested(string trackId)
 
     readonly property int gap: 12
     readonly property bool wide: width > 760
@@ -149,6 +150,9 @@ Item {
                     event.accepted = true
                 } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
                     root.activate(row)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Delete && root.selectedId !== "") {
+                    root.deleteRequested(root.selectedId)
                     event.accepted = true
                 }
             }

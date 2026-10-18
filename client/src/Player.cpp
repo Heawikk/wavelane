@@ -244,6 +244,22 @@ void Player::handleError(QMediaPlayer::Error error, const QString &message)
     emit playbackFailed(m_errorString);
 }
 
+void Player::dropIfDeleted(const QStringList &trackIds)
+{
+    if (!m_current.isValid() || !trackIds.contains(m_current.id))
+        return;
+    // No play report: the server no longer has the track to report against.
+    m_reported = true;
+    m_media.stop();
+    m_media.setSource(QUrl());
+    m_current = Track();
+    m_position = 0;
+    m_maxPosition = 0;
+    emit currentTrackChanged();
+    emit positionChanged();
+    emit durationChanged();
+}
+
 void Player::applyReaction(const QString &trackId, bool liked, bool disliked)
 {
     if (!m_current.isValid() || m_current.id != trackId)

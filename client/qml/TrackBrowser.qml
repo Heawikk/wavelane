@@ -19,6 +19,18 @@ RowLayout {
 
     spacing: 0
 
+    property string pendingDeleteId: ""
+    property string pendingDeleteTitle: ""
+
+    //! Ask first: deleting removes the file from disk and cannot be undone.
+    function askDelete(trackId, title) {
+        if (!auth.isAdmin || !trackId)
+            return
+        pendingDeleteId = trackId
+        pendingDeleteTitle = title
+        confirmDelete.open()
+    }
+
     // Look the selected track up wherever it lives. The revisions are read
     // only to make the binding re-run when any of those lists changes.
     readonly property var detailTrack: {
@@ -69,6 +81,10 @@ RowLayout {
         emptyText: root.emptyText
         selectedId: root.selectedId
         onTrackSelected: function(trackId) { root.selectedId = trackId }
+        onDeleteRequested: function(trackId) {
+            const row = root.model ? root.model.indexOfId(trackId) : -1
+            root.askDelete(trackId, row >= 0 ? root.model.get(row).title : "")
+        }
     }
 
     Rectangle {
@@ -85,5 +101,22 @@ RowLayout {
         track: root.detailTrack
         canPlay: root.playable
         onPlayRequested: root.playSelected()
+        onDeleteRequested: root.askDelete(
+            root.detailTrack ? root.detailTrack.id : "",
+            root.detailTrack ? root.detailTrack.title : "")
+    }
+
+    ConfirmDialog {
+        id: confirmDelete
+        heading: qsTr("Удалить трек")
+        message: qsTr("Удалить «%1» из библиотеки? Файл будет удалён с диска, а трек пропадёт "
+                      + "из избранного, плейлистов и истории. Это нельзя отменить.")
+                     .arg(root.pendingDeleteTitle)
+        confirmText: qsTr("Удалить")
+        danger: true
+        onAccepted: {
+            library.deleteTracks([root.pendingDeleteId])
+            root.selectedId = ""
+        }
     }
 }

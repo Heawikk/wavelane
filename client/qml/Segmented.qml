@@ -8,6 +8,8 @@ Rectangle {
     //! [{ value: "any", label: "Любой" }, ...]
     property var options: []
     property string current: ""
+    //! Share the width equally instead of sizing each option to its label.
+    property bool stretch: false
 
     signal picked(string value)
 
@@ -32,7 +34,8 @@ Rectangle {
                 readonly property bool on: root.current === modelData.value
 
                 height: row.height
-                width: label.implicitWidth + 26
+                width: root.stretch ? Math.floor(row.width / Math.max(1, root.options.length))
+                                    : label.implicitWidth + 26
                 color: on ? Theme.light : (hover.containsMouse ? Theme.rowSelected : "transparent")
 
                 Mono {

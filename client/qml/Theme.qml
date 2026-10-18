@@ -68,6 +68,8 @@ QtObject {
     readonly property string iPlay: ""
     readonly property string iPause: ""
     readonly property string iPrev: ""
+    readonly property string iDelete: ""
+    readonly property string iFolder: ""
     readonly property string iNext: ""
     readonly property string iHeart: ""
     readonly property string iHeartFill: ""

@@ -65,6 +65,9 @@ qt_add_qml_module(wavelane
         qml/TrackRow.qml
         qml/DetailPanel.qml
         qml/TransportBar.qml
+        qml/ConfirmDialog.qml
+        qml/ConflictDialog.qml
+        qml/ImportBanner.qml
 )
 
 target_include_directories(wavelane PRIVATE src)
