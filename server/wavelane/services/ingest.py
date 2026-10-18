@@ -7,11 +7,14 @@ looked up through a list of aliases rather than one hard-coded key.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -459,11 +462,53 @@ def _artist_from_filename(path: Path) -> str | None:
 # ---------------------------------------------------------------------------
 
 
+class ConflictPolicy(StrEnum):
+    """What to do when a different file turns out to be the same recording."""
+
+    ASK = "ask"              # hold the new file and report the conflict
+    KEEP_OLD = "keep_old"    # discard the new file
+    REPLACE = "replace"      # swap the new file into the existing track
+    KEEP_BOTH = "keep_both"  # import it as a separate track
+
+
+@dataclass(slots=True)
+class PreparedFile:
+    """A file that has been read and analysed but not yet written to the catalogue.
+
+    Reading tags and analysing audio is where the seconds go; none of it touches
+    the database. Splitting it off lets an import run several files through it
+    at once and take the (fast) database step one at a time.
+    """
+
+    stored: StoredFile
+    meta: TrackMetadata
+    features: AudioFeature | None
+    source_name: str = ""
+
+
 @dataclass(slots=True)
 class IngestResult:
-    track: Track
-    created: bool
+    track: Track | None
+    #: created | duplicate | conflict | kept_old | replaced
+    status: str
     metadata: TrackMetadata
+    conflict_with: Track | None = None
+    prepared: PreparedFile | None = None
+
+    @property
+    def created(self) -> bool:
+        return self.status == "created"
+
+
+# Two files are the same recording only if their lengths roughly agree: a radio
+# edit and an extended mix share a title and an artist but are different tracks.
+CONFLICT_DURATION_TOLERANCE_MS = 8000
+
+_FEATURE_COLUMNS = (
+    "tempo_bpm", "energy", "valence", "danceability", "acousticness", "instrumentalness",
+    "brightness", "loudness", "dynamics", "vocalness", "language", "musical_key",
+    "musical_mode", "vector", "source", "analyzer_version", "analyzed_at",
+)
 
 
 class IngestService:
@@ -476,11 +521,23 @@ class IngestService:
         storage: Storage | None = None,
         analyzer: AudioAnalyzer | None = None,
         settings: Settings | None = None,
+        db_lock: asyncio.Lock | None = None,
     ) -> None:
         self.session = session
         self.settings = settings or get_settings()
         self.storage = storage or get_storage()
         self.analyzer = analyzer or get_analyzer()
+        # Shared by concurrent ingests in an import. Two files by the same new
+        # artist would otherwise both try to create that artist and one would
+        # hit the unique constraint.
+        self.db_lock = db_lock
+        #: Audio files that stop being referenced once the transaction commits.
+        self.deferred_deletes: list[str] = []
+
+    def _guard(self):
+        return self.db_lock if self.db_lock is not None else contextlib.nullcontext()
+
+    # --- the public entry point ---------------------------------------------
 
     async def ingest_file(
         self,
@@ -490,19 +547,127 @@ class IngestService:
         source_hint: Path | str | None = None,
         metadata_override: dict[str, Any] | None = None,
         analyze: bool | None = None,
+        on_conflict: ConflictPolicy = ConflictPolicy.KEEP_BOTH,
+        commit_now: bool = False,
     ) -> IngestResult:
+        """Bring one stored file into the catalogue.
+
+        ``commit_now`` commits the session before the lock is released. A
+        concurrent import needs it: the "is this file already here?" check of
+        the next worker runs in its own session and cannot see a row this one
+        has flushed but not committed, so releasing the lock first lets two
+        copies of one file both try to insert and the second hits the unique
+        index. Single-request callers leave it off and commit as usual.
+        """
         existing = await self.session.scalar(
             select(Track).where(Track.content_hash == stored.content_hash)
         )
         if existing is not None:
             logger.info("track already in catalogue: %s", stored.content_hash[:12])
-            return IngestResult(track=existing, created=False, metadata=TrackMetadata())
+            return IngestResult(track=existing, status="duplicate", metadata=TrackMetadata())
 
+        prepared = await self.prepare(
+            stored,
+            source_hint=source_hint,
+            metadata_override=metadata_override,
+            analyze=analyze,
+        )
+
+        async with self._guard():
+            # The check above ran before the (slow) analysis and outside the
+            # lock. In a concurrent import another worker may have added the
+            # very same file while this one was busy, so ask again.
+            twin = await self.session.scalar(
+                select(Track).where(Track.content_hash == stored.content_hash)
+            )
+            if twin is not None:
+                return IngestResult(track=twin, status="duplicate", metadata=prepared.meta)
+
+            conflict = None
+            if on_conflict is not ConflictPolicy.KEEP_BOTH:
+                conflict = await self.find_conflict(prepared)
+
+            if conflict is not None:
+                if on_conflict is ConflictPolicy.ASK:
+                    return IngestResult(
+                        track=None,
+                        status="conflict",
+                        metadata=prepared.meta,
+                        conflict_with=conflict,
+                        prepared=prepared,
+                    )
+                if on_conflict is ConflictPolicy.KEEP_OLD:
+                    await self.discard(prepared)
+                    return IngestResult(
+                        track=conflict, status="kept_old", metadata=prepared.meta,
+                        conflict_with=conflict,
+                    )
+                await self.replace_file(conflict, prepared)
+                if commit_now:
+                    await self.session.commit()
+                return IngestResult(
+                    track=conflict, status="replaced", metadata=prepared.meta,
+                    conflict_with=conflict,
+                )
+
+            track = await self.commit(prepared, uploaded_by_id)
+            if commit_now:
+                await self.session.commit()
+        return IngestResult(track=track, status="created", metadata=prepared.meta)
+
+    # --- the pieces ----------------------------------------------------------
+
+    async def prepare(
+        self,
+        stored: StoredFile,
+        *,
+        source_hint: Path | str | None = None,
+        metadata_override: dict[str, Any] | None = None,
+        analyze: bool | None = None,
+    ) -> PreparedFile:
+        """Read tags and analyse the audio. Touches no database state."""
         meta = await anyio.to_thread.run_sync(
             read_metadata, stored.absolute_path, source_hint
         )
         if metadata_override:
             _apply_override(meta, metadata_override)
+
+        should_analyze = self.settings.analyze_on_upload if analyze is None else analyze
+        features = (
+            await self._build_features(stored.absolute_path, meta) if should_analyze else None
+        )
+        name = Path(source_hint).name if source_hint else stored.absolute_path.name
+        return PreparedFile(stored=stored, meta=meta, features=features, source_name=name)
+
+    async def find_conflict(self, prepared: PreparedFile) -> Track | None:
+        """An existing track that is the same recording as this file, if any."""
+        meta = prepared.meta
+        artist_names = {normalize_name(name) for name in meta.artists if name}
+        if not artist_names:
+            artist_names = {normalize_name(meta.primary_artist)}
+
+        rows = await self.session.scalars(
+            select(Track)
+            .join(TrackArtist, TrackArtist.track_id == Track.id)
+            .join(Artist, Artist.id == TrackArtist.artist_id)
+            .where(
+                Track.normalized_title == normalize_name(meta.title),
+                TrackArtist.role == ArtistRole.MAIN,
+                Artist.normalized_name.in_(artist_names),
+                Track.content_hash != prepared.stored.content_hash,
+            )
+            .order_by(Track.created_at)
+            .limit(10)
+        )
+        for candidate in rows.unique():
+            old, new = candidate.duration_ms or 0, meta.duration_ms or 0
+            if old == 0 or new == 0 or abs(old - new) <= CONFLICT_DURATION_TOLERANCE_MS:
+                return candidate
+        return None
+
+    async def commit(self, prepared: PreparedFile, uploaded_by_id: Any = None) -> Track:
+        """Write a prepared file to the catalogue as a new track."""
+        stored, meta, features = prepared.stored, prepared.meta, prepared.features
 
         artists = await self._upsert_artists(meta)
         album = await self._upsert_album(meta, artists)
@@ -521,19 +686,10 @@ class IngestService:
             for artist in group:
                 # Assign the object, not just the foreign key, so the link's
                 # own `artist` relationship is populated too.
-                artist_links.append(
-                    TrackArtist(artist=artist, role=role, position=position)
-                )
+                artist_links.append(TrackArtist(artist=artist, role=role, position=position))
                 position += 1
 
         genre_links = [TrackGenre(genre=genre) for genre in genres]
-
-        should_analyze = self.settings.analyze_on_upload if analyze is None else analyze
-        features = (
-            await self._build_features(stored.absolute_path, meta)
-            if should_analyze
-            else None
-        )
 
         track = Track(
             title=meta.title,
@@ -572,7 +728,78 @@ class IngestService:
             album.total_tracks = max(album.total_tracks, meta.total_tracks or 0)
 
         await self.session.flush()
-        return IngestResult(track=track, created=True, metadata=meta)
+        return track
+
+    async def replace_file(self, track: Track, prepared: PreparedFile) -> None:
+        """Swap a new file into an existing track.
+
+        The track row stays, so its likes, playlists, play history and the
+        taste the wave learned from it all carry over. Only what describes the
+        file changes: its path, size, format, length and measured features. The
+        title, artists and album are the user's catalogue, not the file's, and
+        are left alone.
+        """
+        stored, meta = prepared.stored, prepared.meta
+        old_path = track.storage_path
+
+        track.storage_path = stored.relative_path
+        track.content_hash = stored.content_hash
+        track.file_size = stored.size
+        track.container = stored.container
+        track.codec = meta.codec
+        track.bitrate_kbps = meta.bitrate_kbps
+        track.sample_rate = meta.sample_rate
+        track.channels = meta.channels
+        track.lossless = stored.lossless
+        track.duration_ms = meta.duration_ms or track.duration_ms
+        track.status = TrackStatus.READY
+
+        fresh = prepared.features
+        if fresh is not None:
+            if track.features is None:
+                track.features = fresh
+            else:
+                for column in _FEATURE_COLUMNS:
+                    setattr(track.features, column, getattr(fresh, column))
+
+        album = track.album
+        if album is not None and not album.cover_path and meta.cover_data:
+            try:
+                album.cover_path = self.storage.save_cover(meta.cover_data, meta.cover_mime)
+            except Exception as exc:  # a missing cover must not fail a replacement
+                logger.warning("could not store cover for %s: %s", album.title, exc)
+
+        await self.session.flush()
+        if old_path != stored.relative_path:
+            self.deferred_deletes.append(old_path)
+
+    async def discard(self, prepared: PreparedFile) -> None:
+        """Drop a file that was staged but will not be used."""
+        path = prepared.stored.relative_path
+        in_use = await self.session.scalar(
+            select(Track.id).where(Track.storage_path == path).limit(1)
+        )
+        if in_use is None:
+            self._unlink(path)
+
+    def apply_deferred_deletes(self) -> int:
+        """Remove files made obsolete by a committed replacement."""
+        removed = 0
+        for path in self.deferred_deletes:
+            if self._unlink(path):
+                removed += 1
+        self.deferred_deletes.clear()
+        return removed
+
+    def _unlink(self, relative_path: str) -> bool:
+        try:
+            self.storage.delete_audio(relative_path)
+        except OSError as exc:
+            # Windows will not delete a file that is being played. It is harmless
+            # leftover disk usage, and the cleanup endpoint reclaims it later.
+            logger.warning("could not delete %s: %s", relative_path, exc)
+            return False
+        return True
 
     async def _build_features(self, path: Path, meta: TrackMetadata) -> AudioFeature:
         # DSP analysis decodes audio and runs FFTs: seconds of CPU per track.

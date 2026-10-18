@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Literal
 
+import anyio
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import func, select
 
@@ -20,20 +21,21 @@ from ...schemas.catalog import (
     TrackOut,
     TrackUpdate,
 )
-from ...schemas.common import Message, Page
+from ...schemas.common import Page
 from ...schemas.library import SearchResults
+from ...schemas.upload import DeleteResult, DeleteTracksRequest
 from ...services.catalog import (
     count_query,
     ready_tracks,
-    recompute_artist_counters,
     search_albums,
     search_artists,
     search_tracks,
     serialize_tracks,
     tracks_for_genre,
 )
+from ...services.removal import delete_tracks, unlink_audio
 from ...utils import normalize_name, slugify
-from ..deps import AdminUser, CurrentUser, DbSession, OptionalUser, PageParams
+from ..deps import AdminUser, CurrentUser, DbSession, FileStorage, OptionalUser, PageParams
 
 router = APIRouter(tags=["catalogue"])
 
@@ -142,21 +144,43 @@ async def _replace_genres(db, track: Track, genres: list[str]) -> None:
     await db.flush()
 
 
-@router.delete(
-    "/tracks/{track_id}", response_model=Message, summary="Remove a track (admin)"
+@router.post(
+    "/tracks/bulk-delete",
+    response_model=DeleteResult,
+    summary="Delete several tracks and their files (administrator)",
 )
-async def delete_track(track_id: uuid.UUID, db: DbSession, admin: AdminUser) -> Message:
-    track = await db.get(Track, track_id)
-    if track is None:
+async def bulk_delete_tracks(
+    payload: DeleteTracksRequest, db: DbSession, admin: AdminUser, storage: FileStorage
+) -> DeleteResult:
+    return await _delete(db, storage, payload.track_ids)
+
+
+@router.delete(
+    "/tracks/{track_id}",
+    response_model=DeleteResult,
+    summary="Delete a track and its file (administrator)",
+)
+async def delete_track(
+    track_id: uuid.UUID, db: DbSession, admin: AdminUser, storage: FileStorage
+) -> DeleteResult:
+    result = await _delete(db, storage, [track_id])
+    if result.deleted == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="track not found")
-    artist_ids = [link.artist_id for link in track.artist_links]
-    await db.delete(track)
-    await db.flush()
-    for artist_id in artist_ids:
-        await recompute_artist_counters(db, artist_id)
-    # The audio file itself is content-addressed and may back another row, so
-    # it is left in storage; a separate sweep reclaims unreferenced files.
-    return Message(detail="track removed from the catalogue")
+    return result
+
+
+async def _delete(db, storage, track_ids: list[uuid.UUID]) -> DeleteResult:
+    stats = await delete_tracks(db, track_ids)
+    # Commit before touching the disk: if the transaction failed, rows must not
+    # be left pointing at files that are already gone.
+    await db.commit()
+    removed = await anyio.to_thread.run_sync(unlink_audio, storage, stats.paths)
+    return DeleteResult(
+        deleted=stats.deleted,
+        files_removed=removed,
+        albums_removed=stats.albums_removed,
+        artists_removed=stats.artists_removed,
+    )
 
 
 # ---------------------------------------------------------------------------

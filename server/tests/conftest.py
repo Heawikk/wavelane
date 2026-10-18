@@ -47,7 +47,7 @@ async def app_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("WAVELANE_FFPROBE_PATH", "")
 
     from wavelane import config, db
-    from wavelane.services import audio_analysis
+    from wavelane.services import audio_analysis, conflicts, imports
     from wavelane.services import storage as storage_module
 
     config.get_settings.cache_clear()
@@ -55,6 +55,9 @@ async def app_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     db._session_factory = None
     storage_module._storage = None
     audio_analysis._analyzer = None
+    # in-memory state that must not leak from one test to the next
+    conflicts._registry = None
+    imports._manager = None
 
     settings = config.get_settings()
     settings.ensure_directories()
@@ -65,6 +68,8 @@ async def app_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     config.get_settings.cache_clear()
     storage_module._storage = None
     audio_analysis._analyzer = None
+    conflicts._registry = None
+    imports._manager = None
 
 
 @pytest.fixture

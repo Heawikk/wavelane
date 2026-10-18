@@ -1,4 +1,4 @@
-"""Uploading audio, scanning server folders, re-running analysis."""
+"""Uploading audio (administrators only) and re-running analysis."""
 
 from __future__ import annotations
 
@@ -12,17 +12,13 @@ from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from ...models import AudioFeature, Track, TrackStatus
 from ...schemas.catalog import TrackOut
 from ...schemas.common import Message
-from ...schemas.upload import ScanRequest, ScanResult, UploadedTrack, UploadResult
+from ...schemas.upload import UploadedTrack, UploadResult
 from ...services.audio_analysis import get_analyzer
 from ...services.catalog import serialize_tracks
-from ...services.ingest import IngestService, read_metadata
-from ...services.storage import (
-    AUDIO_EXTENSIONS,
-    StorageError,
-    UnsupportedFormatError,
-)
+from ...services.conflicts import describe_conflict, get_conflict_registry
+from ...services.ingest import ConflictPolicy, IngestService, read_metadata
+from ...services.storage import StorageError, UnsupportedFormatError
 from ...utils import now_utc
-from ...wave.features import normalize_tempo
 from ..deps import AdminUser, AppSettings, CurrentUser, DbSession, FileStorage
 
 logger = logging.getLogger(__name__)
@@ -36,11 +32,11 @@ MAX_FILES_PER_REQUEST = 50
     "/upload",
     response_model=UploadResult,
     status_code=status.HTTP_201_CREATED,
-    summary="Upload one or more audio files",
+    summary="Upload one or more audio files (administrator)",
 )
 async def upload_tracks(
     db: DbSession,
-    user: CurrentUser,
+    admin: AdminUser,
     storage: FileStorage,
     settings: AppSettings,
     files: list[UploadFile] = File(..., description="Audio files (mp3, flac, m4a, ogg, ...)"),
@@ -52,7 +48,12 @@ async def upload_tracks(
         )
 
     service = IngestService(db, storage=storage, settings=settings)
+    registry = get_conflict_registry()
     result = UploadResult()
+
+    def failed(filename: str, message: str) -> None:
+        result.failed += 1
+        result.items.append(UploadedTrack(filename=filename, status="failed", error=message))
 
     for upload in files:
         filename = upload.filename or "unnamed"
@@ -62,17 +63,8 @@ async def upload_tracks(
             temp_path = await anyio.to_thread.run_sync(
                 storage.stage_upload, upload.file, filename, settings.max_upload_bytes
             )
-        except UnsupportedFormatError as exc:
-            result.failed += 1
-            result.items.append(
-                UploadedTrack(filename=filename, created=False, error=str(exc))
-            )
-            continue
-        except StorageError as exc:
-            result.failed += 1
-            result.items.append(
-                UploadedTrack(filename=filename, created=False, error=str(exc))
-            )
+        except (UnsupportedFormatError, StorageError) as exc:
+            failed(filename, str(exc))
             continue
         finally:
             await upload.close()
@@ -80,85 +72,47 @@ async def upload_tracks(
         try:
             stored = await anyio.to_thread.run_sync(storage.commit_audio, temp_path)
             ingested = await service.ingest_file(
-                stored, uploaded_by_id=user.id, source_hint=filename
+                stored,
+                uploaded_by_id=admin.id,
+                source_hint=filename,
+                on_conflict=ConflictPolicy.ASK,
             )
         except Exception as exc:
             logger.exception("ingest failed for %s", filename)
             Path(temp_path).unlink(missing_ok=True)
-            result.failed += 1
+            failed(filename, str(exc))
+            continue
+
+        if ingested.status == "conflict":
+            pending = registry.add(
+                user_id=admin.id,
+                filename=filename,
+                prepared=ingested.prepared,
+                existing_track_id=ingested.conflict_with.id,
+            )
+            result.conflicts += 1
             result.items.append(
-                UploadedTrack(filename=filename, created=False, error=str(exc))
+                UploadedTrack(
+                    filename=filename,
+                    status="conflict",
+                    conflict=describe_conflict(pending, ingested.conflict_with),
+                )
             )
             continue
 
-        serialized = (await serialize_tracks(db, [ingested.track], user.id))[0]
-        if ingested.created:
+        serialized = (await serialize_tracks(db, [ingested.track], admin.id))[0]
+        if ingested.status == "created":
             result.uploaded += 1
         else:
             result.duplicates += 1
         result.items.append(
             UploadedTrack(
-                filename=filename, created=ingested.created, track=serialized
+                filename=filename,
+                status="added" if ingested.created else "duplicate",
+                created=ingested.created,
+                track=serialized,
             )
         )
-
-    await db.flush()
-    return result
-
-
-@router.post(
-    "/admin/scan",
-    response_model=ScanResult,
-    summary="Import every audio file under a server-side folder (admin)",
-)
-async def scan_folder(
-    payload: ScanRequest,
-    db: DbSession,
-    admin: AdminUser,
-    storage: FileStorage,
-    settings: AppSettings,
-) -> ScanResult:
-    root = Path(payload.path).expanduser()
-    if not root.exists():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"path does not exist: {root}"
-        )
-    if not root.is_dir():
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail=f"not a directory: {root}"
-        )
-
-    pattern = "**/*" if payload.recursive else "*"
-    candidates = [
-        path
-        for path in sorted(root.glob(pattern))
-        if path.is_file() and path.suffix.lower() in AUDIO_EXTENSIONS
-    ][: payload.limit]
-
-    service = IngestService(db, storage=storage, settings=settings)
-    result = ScanResult(scanned=len(candidates))
-
-    for path in candidates:
-        try:
-            stored = await anyio.to_thread.run_sync(storage.import_existing, path)
-            ingested = await service.ingest_file(
-                stored,
-                uploaded_by_id=admin.id,
-                source_hint=path,
-                analyze=payload.analyze,
-            )
-        except Exception as exc:
-            result.failed += 1
-            if len(result.errors) < 50:
-                result.errors.append(f"{path.name}: {exc}")
-            logger.warning("scan failed for %s: %s", path, exc)
-            continue
-
-        if ingested.created:
-            result.imported += 1
-            result.track_ids.append(ingested.track.id)
-        else:
-            result.duplicates += 1
 
     await db.flush()
     return result
@@ -251,4 +205,3 @@ async def analysis_status(admin: AdminUser) -> Message:
     )
 
 
-__all__ = ["normalize_tempo", "router"]

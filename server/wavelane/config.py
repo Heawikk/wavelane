@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     ffmpeg_path: str = ""
     ffprobe_path: str = ""
     analyze_on_upload: bool = True
+    #: Files analysed side by side during a folder import; 0 picks a sensible number.
+    import_workers: int = 0
 
     # --- api ----------------------------------------------------------------
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
