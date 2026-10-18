@@ -2,6 +2,7 @@
 #include "AuthController.h"
 #include "DiscordPresence.h"
 #include "LibraryController.h"
+#include "LyricsController.h"
 #include "MediaSession.h"
 #include "Player.h"
 #include "Settings.h"
@@ -109,6 +110,7 @@ int main(int argc, char *argv[])
     AuthController auth(&api, &settings);
     WaveController wave(&api, &player);
     LibraryController library(&api, &player);
+    LyricsController lyrics(&api, &player);
     MediaSession media(&player, &api);
     DiscordPresence discord(&player, &api, &settings);
 
@@ -141,6 +143,7 @@ int main(int argc, char *argv[])
     context->setContextProperty(QStringLiteral("player"), &player);
     context->setContextProperty(QStringLiteral("wave"), &wave);
     context->setContextProperty(QStringLiteral("library"), &library);
+    context->setContextProperty(QStringLiteral("lyrics"), &lyrics);
     context->setContextProperty(QStringLiteral("media"), &media);
     context->setContextProperty(QStringLiteral("discord"), &discord);
 

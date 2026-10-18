@@ -11,6 +11,11 @@ Rectangle {
 
     readonly property bool waveContext: player.context === "wave"
 
+    //! The lyrics view is open; the button lights up while it is.
+    property bool lyricsOpen: false
+
+    signal toggleLyrics()
+
     function next() {
         if (waveContext)
             wave.playNext()
@@ -163,6 +168,16 @@ Rectangle {
             enabledWhen: player.hasTrack
             tooltip: qsTr("Не нравится · D")
             onClicked: root.dislike()
+        }
+
+        FlatButton {
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredHeight: 26
+            horizontalPadding: 10
+            text: qsTr("Текст")
+            primary: root.lyricsOpen
+            enabledWhen: player.hasTrack
+            onClicked: root.toggleLyrics()
         }
 
         Rectangle {

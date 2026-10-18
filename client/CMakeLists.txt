@@ -32,6 +32,7 @@ qt_add_executable(wavelane
     src/Track.h              src/Track.cpp
     src/TrackListModel.h     src/TrackListModel.cpp
     src/AudioTap.h           src/AudioTap.cpp
+    src/LyricsController.h   src/LyricsController.cpp
     src/MediaSession.h       src/MediaSession.cpp
     src/DiscordPresence.h    src/DiscordPresence.cpp
     src/Player.h             src/Player.cpp
@@ -80,6 +81,8 @@ qt_add_qml_module(wavelane
         qml/VibeBackground.qml
         qml/Equalizer.qml
         qml/Logo.qml
+        qml/LyricsView.qml
+        qml/LyricsEditor.qml
         qml/FlatField.qml
         qml/SettingsDialog.qml
 )

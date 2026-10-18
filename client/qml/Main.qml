@@ -27,6 +27,11 @@ ApplicationWindow {
 
     property string page: "wave"
     property bool detailOpen: true
+    //! The words of the playing song cover the page while this is set.
+    property bool lyricsOpen: false
+
+    onPageChanged: lyricsOpen = false
+    onLyricsOpenChanged: lyrics.active = lyricsOpen && auth.signedIn
 
     function showPage(name) {
         window.page = name
@@ -47,6 +52,10 @@ ApplicationWindow {
         target: library
         function onNotify(message) { toast.show(message) }
         function onConflictsFound() { conflictDialog.open() }
+    }
+    Connections {
+        target: lyrics
+        function onNotify(message) { toast.show(message) }
     }
     Connections {
         target: player
@@ -92,6 +101,11 @@ ApplicationWindow {
         enabled: auth.signedIn
         sequences: ["Ctrl+B"]
         onActivated: window.detailOpen = !window.detailOpen
+    }
+    Shortcut {
+        enabled: auth.signedIn && window.lyricsOpen && !lyricsEditor.opened
+        sequences: ["Escape"]
+        onActivated: window.lyricsOpen = false
     }
     Shortcut {
         enabled: auth.signedIn
@@ -185,21 +199,32 @@ ApplicationWindow {
                         onShowConflicts: conflictDialog.open()
                     }
 
-                    StackLayout {
+                    Item {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        currentIndex: window.page === "search" ? 0
-                                      : window.page === "wave" ? 1 : 2
 
-                        SearchPage {
-                            id: searchPage
-                            detailOpen: window.detailOpen
+                        StackLayout {
+                            anchors.fill: parent
+                            currentIndex: window.page === "search" ? 0
+                                          : window.page === "wave" ? 1 : 2
+
+                            SearchPage {
+                                id: searchPage
+                                detailOpen: window.detailOpen
+                            }
+                            WavePage {}
+                            CollectionPage {
+                                id: collectionPage
+                                detailOpen: window.detailOpen
+                                onShowConflicts: conflictDialog.open()
+                            }
                         }
-                        WavePage {}
-                        CollectionPage {
-                            id: collectionPage
-                            detailOpen: window.detailOpen
-                            onShowConflicts: conflictDialog.open()
+
+                        LyricsView {
+                            anchors.fill: parent
+                            visible: window.lyricsOpen
+                            onEditRequested: lyricsEditor.openForCurrent()
+                            onCloseRequested: window.lyricsOpen = false
                         }
                     }
                 }
@@ -209,6 +234,8 @@ ApplicationWindow {
                 id: transport
                 Layout.fillWidth: true
                 Layout.preferredHeight: Theme.transportHeight
+                lyricsOpen: window.lyricsOpen
+                onToggleLyrics: window.lyricsOpen = !window.lyricsOpen
             }
         }
     }
@@ -226,6 +253,7 @@ ApplicationWindow {
 
     ConflictDialog { id: conflictDialog }
     SettingsDialog { id: settingsDialog }
+    LyricsEditor { id: lyricsEditor }
 
     Toast { id: toast }
 }
