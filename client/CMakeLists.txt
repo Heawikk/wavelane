@@ -43,6 +43,7 @@ qt_add_qml_module(wavelane
         qml/Mono.qml
         qml/Icon.qml
         qml/IconButton.qml
+        qml/RoundButton.qml
         qml/FlatButton.qml
         qml/Segmented.qml
         qml/FlatCombo.qml
@@ -54,13 +55,15 @@ qt_add_qml_module(wavelane
         qml/WindowButton.qml
         qml/ResizeHandles.qml
         qml/TitleBar.qml
+        qml/Sidebar.qml
         qml/LoginPage.qml
-        qml/Workspace.qml
-        qml/SourcesPanel.qml
+        qml/WavePage.qml
+        qml/SearchPage.qml
+        qml/CollectionPage.qml
+        qml/TrackBrowser.qml
         qml/TrackTable.qml
         qml/TrackRow.qml
         qml/DetailPanel.qml
-        qml/BottomPanel.qml
         qml/TransportBar.qml
 )
 

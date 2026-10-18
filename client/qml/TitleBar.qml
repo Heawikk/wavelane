@@ -3,22 +3,23 @@ import QtQuick.Layouts
 import Wavelane
 
 /*!
-    The top bar, which is also the window's title bar.
+    The strip along the top of the window, which is also its title bar.
 
-    Everything that is not a control drags the window and double-clicking it
-    maximises, exactly like the native bar it replaces. While signed out only
-    the brand and the window buttons are shown.
+    Signed out it carries the brand; signed in the brand lives in the sidebar,
+    so the bar is just the drag area and window buttons — plus, on the wave
+    page only, the dials that steer the wave.
 */
 Rectangle {
     id: root
 
     required property var window
+    property string page: "wave"
+
     readonly property bool signedIn: auth.signedIn
     readonly property bool maximized: window.visibility === Window.Maximized
-    readonly property bool wavePlaying: wave.started && player.hasTrack
-                                        && player.context === "wave"
+    readonly property bool showDials: signedIn && page === "wave"
 
-    color: Theme.bar
+    color: signedIn ? "transparent" : Theme.bar
 
     readonly property var characterOptions: [
         { value: "any",        label: qsTr("Любой") },
@@ -41,11 +42,26 @@ Rectangle {
         { value: "foreign",      label: qsTr("Иностранный") },
         { value: "instrumental", label: qsTr("Без слов") }
     ]
+    readonly property var diversityOptions: [
+        { value: "0.1", label: qsTr("Разнообразие 10%") },
+        { value: "0.3", label: qsTr("Разнообразие 30%") },
+        { value: "0.6", label: qsTr("Разнообразие 60%") },
+        { value: "0.9", label: qsTr("Разнообразие 90%") }
+    ]
 
-    readonly property string stateText: player.buffering ? qsTr("Буферизация")
-                                        : player.playing ? qsTr("Играет")
-                                        : player.hasTrack ? qsTr("Пауза")
-                                        : qsTr("Остановлено")
+    //! The stored diversity is a free number; show the nearest preset.
+    function nearestDiversity() {
+        let best = diversityOptions[0].value
+        let distance = 10
+        for (let i = 0; i < diversityOptions.length; ++i) {
+            const gap = Math.abs(parseFloat(diversityOptions[i].value) - wave.diversity)
+            if (gap < distance) {
+                distance = gap
+                best = diversityOptions[i].value
+            }
+        }
+        return best
+    }
 
     // --- drag the window by any empty part of the bar -----------------------
     Item {
@@ -66,16 +82,17 @@ Rectangle {
         width: parent.width
         height: 1
         color: Theme.border
+        visible: !root.signedIn
     }
 
     RowLayout {
         anchors.fill: parent
         spacing: 0
 
-        // --- brand ---
+        // brand, only before sign-in
         Row {
+            visible: !root.signedIn
             Layout.leftMargin: 14
-            Layout.rightMargin: 16
             spacing: 10
 
             Rectangle {
@@ -113,71 +130,24 @@ Rectangle {
             }
         }
 
-        Rectangle {
-            visible: root.signedIn
-            Layout.preferredWidth: 1
+        Item {
+            Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Theme.border
         }
 
-        // --- what is playing ---
-        ColumnLayout {
-            visible: root.signedIn
-            Layout.preferredWidth: 200
-            Layout.maximumWidth: 200
-            Layout.leftMargin: 16
-            spacing: 1
-
-            Row {
-                spacing: 7
-
-                Rectangle {
-                    width: 6
-                    height: 6
-                    radius: 3
-                    color: player.playing ? Theme.positive : Theme.faint
-                    anchors.verticalCenter: parent.verticalCenter
-                }
-                Mono {
-                    text: root.stateText
-                    font.pixelSize: 10
-                    font.weight: Font.DemiBold
-                    color: player.playing ? Theme.text : Theme.muted
-                }
-            }
-
-            Text {
-                Layout.fillWidth: true
-                text: player.hasTrack ? player.currentTrack.title + " — "
-                                        + player.currentTrack.artistName
-                                      : qsTr("Выберите трек")
-                color: player.hasTrack ? Theme.muted : Theme.faint
-                font.family: Theme.sans
-                font.pixelSize: Theme.fontSmall
-                elide: Text.ElideRight
-            }
-        }
-
-        Rectangle {
-            visible: root.signedIn
-            Layout.preferredWidth: 1
-            Layout.fillHeight: true
-            Layout.leftMargin: 14
-            color: Theme.border
-        }
-
-        // --- the three dials of the wave ---
+        // --- the dials of the wave ---
         Segmented {
-            visible: root.signedIn
-            Layout.leftMargin: 14
+            visible: root.showDials
+            Layout.alignment: Qt.AlignVCenter
             options: root.characterOptions
             current: wave.character
             onPicked: function(value) { wave.setCharacter(value) }
         }
 
         FlatCombo {
-            visible: root.signedIn
-            Layout.leftMargin: 10
+            visible: root.showDials
+            Layout.alignment: Qt.AlignVCenter
+            Layout.leftMargin: 8
             implicitWidth: 172
             options: root.moodOptions
             current: wave.mood
@@ -185,7 +155,8 @@ Rectangle {
         }
 
         FlatCombo {
-            visible: root.signedIn
+            visible: root.showDials
+            Layout.alignment: Qt.AlignVCenter
             Layout.leftMargin: 6
             implicitWidth: 132
             options: root.languageOptions
@@ -193,19 +164,15 @@ Rectangle {
             onPicked: function(value) { wave.setLanguage(value) }
         }
 
-        Item {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-        }
-
-        FlatButton {
-            visible: root.signedIn
-            Layout.rightMargin: 12
-            primary: true
-            glyph: root.wavePlaying ? Theme.iNext : Theme.iPlay
-            text: root.wavePlaying ? qsTr("Дальше") : qsTr("Слушать волну")
-            enabledWhen: !wave.loading
-            onClicked: root.wavePlaying ? wave.playNext() : wave.start()
+        FlatCombo {
+            visible: root.showDials
+            Layout.alignment: Qt.AlignVCenter
+            Layout.leftMargin: 6
+            Layout.rightMargin: 14
+            implicitWidth: 168
+            options: root.diversityOptions
+            current: root.nearestDiversity()
+            onPicked: function(value) { wave.setDiversity(parseFloat(value)) }
         }
 
         // --- window controls ---

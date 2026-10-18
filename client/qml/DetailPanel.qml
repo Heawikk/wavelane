@@ -14,6 +14,8 @@ Rectangle {
 
     //! A track as a variant map, or null.
     property var track: null
+    //! False where playing from here makes no sense (the history).
+    property bool canPlay: true
 
     signal playRequested()
 
@@ -54,7 +56,6 @@ Rectangle {
         { keys: "D",      action: qsTr("Не нравится") },
         { keys: "Ctrl F", action: qsTr("Поиск") },
         { keys: "Ctrl U", action: qsTr("Загрузить музыку") },
-        { keys: "Ctrl J", action: qsTr("Нижняя панель") },
         { keys: "Ctrl B", action: qsTr("Эта панель") }
     ]
 
@@ -79,7 +80,6 @@ Rectangle {
 
         SectionHeader {
             Layout.fillWidth: true
-            number: "03"
             title: qsTr("Трек")
         }
 
@@ -269,7 +269,7 @@ Rectangle {
                         primary: true
                         glyph: Theme.iPlay
                         text: qsTr("Слушать")
-                        visible: !root.isPlaying
+                        visible: !root.isPlaying && root.canPlay
                         enabledWhen: root.hasTrack
                         onClicked: root.playRequested()
                     }

@@ -52,7 +52,7 @@ QtObject {
     readonly property string sans: "Segoe UI"
 
     // --- metrics ----------------------------------------------------------
-    readonly property int barHeight: 48
+    readonly property int barHeight: 40
     readonly property int headerHeight: 36
     readonly property int rowHeight: 34
     readonly property int transportHeight: 56
@@ -67,6 +67,7 @@ QtObject {
     // --- icon glyphs (Segoe Fluent Icons / Segoe MDL2 Assets) ---------------
     readonly property string iPlay: ""
     readonly property string iPause: ""
+    readonly property string iPrev: ""
     readonly property string iNext: ""
     readonly property string iHeart: ""
     readonly property string iHeartFill: ""

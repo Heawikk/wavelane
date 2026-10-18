@@ -5,7 +5,7 @@ import Wavelane
 Rectangle {
     id: root
 
-    property string number: "01"
+    property string number: ""
     property string title: ""
 
     //! Anything declared inside lands in the right-hand action row.
@@ -28,6 +28,7 @@ Rectangle {
         spacing: 10
 
         Rectangle {
+            visible: root.number !== ""
             width: 18
             height: 16
             color: Theme.accent
