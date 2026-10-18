@@ -79,6 +79,9 @@ public:
     void patch(const QString &path, const QJsonObject &body, Callback callback);
     void del(const QString &path, Callback callback);
 
+    //! Download a public file (a cover) without credentials. Empty on failure.
+    void fetchBytes(const QUrl &url, std::function<void(const QByteArray &)> callback);
+
     //! Multipart upload of local files to /upload.
     void uploadFiles(const QStringList &localPaths, Callback callback);
 

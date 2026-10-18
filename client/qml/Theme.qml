@@ -70,6 +70,7 @@ QtObject {
     readonly property string iPrev: ""
     readonly property string iDelete: ""
     readonly property string iFolder: ""
+    readonly property string iSettings: ""
     readonly property string iNext: ""
     readonly property string iHeart: ""
     readonly property string iHeartFill: ""

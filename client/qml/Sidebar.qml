@@ -13,6 +13,7 @@ Rectangle {
     required property var window
 
     signal selected(string page)
+    signal openSettings()
 
     color: Theme.panel
 
@@ -175,6 +176,12 @@ Rectangle {
                         font.pixelSize: 10
                         color: Theme.faint
                     }
+                }
+
+                IconButton {
+                    glyph: Theme.iSettings
+                    tooltip: qsTr("Интеграции")
+                    onClicked: root.openSettings()
                 }
 
                 IconButton {

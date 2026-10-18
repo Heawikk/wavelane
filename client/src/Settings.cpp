@@ -8,6 +8,9 @@ constexpr auto kRefreshToken = "session/refreshToken";
 constexpr auto kLastLogin = "session/lastLogin";
 constexpr auto kVolume = "playback/volume";
 constexpr auto kMuted = "playback/muted";
+constexpr auto kDiscordEnabled = "discord/enabled";
+constexpr auto kDiscordClientId = "discord/clientId";
+constexpr auto kDiscordCoverBase = "discord/coverBase";
 constexpr auto kDefaultServer = "http://127.0.0.1:8000";
 } // namespace
 
@@ -58,6 +61,49 @@ void Settings::setMuted(bool value)
         return;
     m_store.setValue(kMuted, value);
     emit mutedChanged();
+}
+
+bool Settings::discordEnabled() const
+{
+    return m_store.value(kDiscordEnabled, true).toBool();
+}
+
+void Settings::setDiscordEnabled(bool value)
+{
+    if (value == discordEnabled())
+        return;
+    m_store.setValue(kDiscordEnabled, value);
+    emit discordChanged();
+}
+
+QString Settings::discordClientId() const
+{
+    return m_store.value(kDiscordClientId).toString();
+}
+
+void Settings::setDiscordClientId(const QString &id)
+{
+    const QString trimmed = id.trimmed();
+    if (trimmed == discordClientId())
+        return;
+    m_store.setValue(kDiscordClientId, trimmed);
+    emit discordChanged();
+}
+
+QString Settings::discordCoverBase() const
+{
+    return m_store.value(kDiscordCoverBase).toString();
+}
+
+void Settings::setDiscordCoverBase(const QString &url)
+{
+    QString trimmed = url.trimmed();
+    while (trimmed.endsWith(QLatin1Char('/')))
+        trimmed.chop(1);
+    if (trimmed == discordCoverBase())
+        return;
+    m_store.setValue(kDiscordCoverBase, trimmed);
+    emit discordChanged();
 }
 
 QString Settings::refreshToken() const

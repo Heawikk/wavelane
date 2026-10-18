@@ -196,7 +196,9 @@ void Player::seek(qint64 milliseconds)
 {
     if (!m_current.isValid())
         return;
-    m_media.setPosition(qBound<qint64>(0, milliseconds, duration()));
+    const qint64 target = qBound<qint64>(0, milliseconds, duration());
+    m_media.setPosition(target);
+    emit seeked(target);
 }
 
 void Player::seekFraction(double fraction)

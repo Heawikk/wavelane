@@ -32,6 +32,8 @@ qt_add_executable(wavelane
     src/Track.h              src/Track.cpp
     src/TrackListModel.h     src/TrackListModel.cpp
     src/AudioTap.h           src/AudioTap.cpp
+    src/MediaSession.h       src/MediaSession.cpp
+    src/DiscordPresence.h    src/DiscordPresence.cpp
     src/Player.h             src/Player.cpp
     src/WaveController.h     src/WaveController.cpp
     src/LibraryController.h  src/LibraryController.cpp
@@ -78,6 +80,8 @@ qt_add_qml_module(wavelane
         qml/VibeBackground.qml
         qml/Equalizer.qml
         qml/Logo.qml
+        qml/FlatField.qml
+        qml/SettingsDialog.qml
 )
 
 # Compiled for every graphics backend Qt supports, so the same file runs on
@@ -118,6 +122,11 @@ target_link_libraries(wavelane PRIVATE
     Qt6::Network
     Qt6::Multimedia
 )
+
+# The Windows media controls are a WinRT API.
+if(WIN32)
+    target_link_libraries(wavelane PRIVATE windowsapp)
+endif()
 
 set_target_properties(wavelane PROPERTIES
     # A GUI app should not open a console window on Windows.

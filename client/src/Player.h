@@ -103,6 +103,8 @@ signals:
     //! Emitted once per track when about to run out, so the next batch can load.
     void nearEnd(const QString &trackId);
     void playbackFailed(const QString &message);
+    //! The listener moved the playhead (as opposed to playback just advancing).
+    void seeked(qint64 positionMs);
 
 private:
     void handleMediaStatus(QMediaPlayer::MediaStatus status);

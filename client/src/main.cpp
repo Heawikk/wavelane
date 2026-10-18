@@ -1,6 +1,8 @@
 #include "ApiClient.h"
 #include "AuthController.h"
+#include "DiscordPresence.h"
 #include "LibraryController.h"
+#include "MediaSession.h"
 #include "Player.h"
 #include "Settings.h"
 #include "WaveController.h"
@@ -15,6 +17,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QWindow>
 #include <QTextStream>
 
 Q_LOGGING_CATEGORY(lcApp, "wavelane.app")
@@ -106,6 +109,8 @@ int main(int argc, char *argv[])
     AuthController auth(&api, &settings);
     WaveController wave(&api, &player);
     LibraryController library(&api, &player);
+    MediaSession media(&player, &api);
+    DiscordPresence discord(&player, &api, &settings);
 
     // A like made in any list must show up everywhere the track appears.
     QObject::connect(&library, &LibraryController::reactionChanged, &wave,
@@ -136,6 +141,8 @@ int main(int argc, char *argv[])
     context->setContextProperty(QStringLiteral("player"), &player);
     context->setContextProperty(QStringLiteral("wave"), &wave);
     context->setContextProperty(QStringLiteral("library"), &library);
+    context->setContextProperty(QStringLiteral("media"), &media);
+    context->setContextProperty(QStringLiteral("discord"), &discord);
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,
                      []() { QCoreApplication::exit(-1); },
@@ -148,6 +155,20 @@ int main(int argc, char *argv[])
     }
 
     qCInfo(lcApp) << "server" << api.baseUrl() << "stored session:" << api.hasSession();
+
+    // Let the operating system show what is playing, and take its buttons.
+    if (auto *window = qobject_cast<QWindow *>(engine.rootObjects().constFirst()))
+        media.attach(window);
+    QObject::connect(&media, &MediaSession::playRequested, &player, &Player::resume);
+    QObject::connect(&media, &MediaSession::pauseRequested, &player, &Player::pause);
+    QObject::connect(&media, &MediaSession::seekRequested, &player, &Player::seek);
+    QObject::connect(&media, &MediaSession::nextRequested, &app, [&]() {
+        // Same rule as the Next button: the wave owns its own queue.
+        if (player.context() == QLatin1String("wave"))
+            wave.playNext();
+        else
+            library.playNext();
+    });
 
     if (parser.isSet(playWaveOption)) {
         // --wave: go straight into listening once the session is known good.

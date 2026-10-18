@@ -241,6 +241,19 @@ void ApiClient::failWaiting(const QString &reason, int status)
     }
 }
 
+void ApiClient::fetchBytes(const QUrl &url, std::function<void(const QByteArray &)> callback)
+{
+    QNetworkRequest request(url);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                         QNetworkRequest::NoLessSafeRedirectPolicy);
+    QNetworkReply *reply = m_network.get(request);
+    connect(reply, &QNetworkReply::finished, this, [reply, callback]() {
+        reply->deleteLater();
+        if (callback)
+            callback(reply->error() == QNetworkReply::NoError ? reply->readAll() : QByteArray());
+    });
+}
+
 void ApiClient::uploadFiles(const QStringList &localPaths, Callback callback)
 {
     auto *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);

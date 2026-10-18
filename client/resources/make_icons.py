@@ -76,6 +76,19 @@ def draw(size: int) -> Image.Image:
     return image.resize((size, size), Image.LANCZOS)
 
 
+def draw_discord_asset(size: int = 1024) -> Image.Image:
+    """The logo on a dark tile, for Discord's Rich Presence art assets.
+
+    Discord shows the image as a square tile and wants at least 512 px, so
+    unlike the icon it needs a background and plenty of margin.
+    """
+    tile = Image.new("RGBA", (size, size), (12, 13, 17, 255))
+    mark = draw(size * 3 // 5)
+    offset = (size - mark.width) // 2
+    tile.alpha_composite(mark, (offset, offset))
+    return tile
+
+
 def main() -> None:
     images = {size: draw(size) for size in SIZES}
     for size, image in images.items():
@@ -89,6 +102,7 @@ def main() -> None:
         sizes=[(s, s) for s in SIZES],
         append_images=[images[s] for s in SIZES if s != 256],
     )
+    draw_discord_asset().save(HERE / "wavelane-discord.png")
     print("wrote wavelane.ico and", ", ".join(f"wavelane-{s}.png" for s in SIZES))
 
 

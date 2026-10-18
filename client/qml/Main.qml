@@ -164,6 +164,7 @@ ApplicationWindow {
                     window: window
                     page: window.page
                     onSelected: function(name) { window.showPage(name) }
+                    onOpenSettings: settingsDialog.open()
                 }
 
                 ColumnLayout {
@@ -224,6 +225,7 @@ ApplicationWindow {
     ResizeHandles { window: window }
 
     ConflictDialog { id: conflictDialog }
+    SettingsDialog { id: settingsDialog }
 
     Toast { id: toast }
 }
