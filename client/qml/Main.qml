@@ -16,7 +16,7 @@ ApplicationWindow {
 
     width: 1280
     height: 800
-    minimumWidth: 1200
+    minimumWidth: 1280
     minimumHeight: 640
     visible: true
     title: qsTr("Wavelane")
@@ -176,6 +176,12 @@ ApplicationWindow {
                         Layout.preferredHeight: Theme.barHeight
                         window: window
                         page: window.page
+                        detailOpen: window.detailOpen
+                        collectionTab: collectionPage.tab
+                        onToggleDetail: window.detailOpen = !window.detailOpen
+                        onOpenUpload: collectionPage.openUpload()
+                        onOpenImport: collectionPage.openImport()
+                        onShowConflicts: conflictDialog.open()
                     }
 
                     StackLayout {
@@ -187,13 +193,11 @@ ApplicationWindow {
                         SearchPage {
                             id: searchPage
                             detailOpen: window.detailOpen
-                            onToggleDetail: window.detailOpen = !window.detailOpen
                         }
                         WavePage {}
                         CollectionPage {
                             id: collectionPage
                             detailOpen: window.detailOpen
-                            onToggleDetail: window.detailOpen = !window.detailOpen
                             onShowConflicts: conflictDialog.open()
                         }
                     }

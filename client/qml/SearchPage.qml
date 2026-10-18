@@ -9,8 +9,6 @@ Item {
 
     property bool detailOpen: true
 
-    signal toggleDetail()
-
     function focusSearch() {
         field.forceActiveFocus()
         field.selectAll()
@@ -19,26 +17,6 @@ Item {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-
-        SectionHeader {
-            Layout.fillWidth: true
-            number: "01"
-            title: qsTr("Поиск")
-
-            BusyIndicator {
-                running: library.searching
-                visible: running
-                implicitWidth: 18
-                implicitHeight: 18
-            }
-            IconButton {
-                glyph: Theme.iPanel
-                active: root.detailOpen
-                activeColor: Theme.accentText
-                tooltip: qsTr("Панель деталей · Ctrl+B")
-                onClicked: root.toggleDetail()
-            }
-        }
 
         // the big input, as on Yandex Music's search page
         Item {

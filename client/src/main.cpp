@@ -9,6 +9,7 @@
 #include <QDateTime>
 #include <QFile>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QLoggingCategory>
 #include <QMutex>
 #include <QQmlApplicationEngine>
@@ -69,6 +70,12 @@ int main(int argc, char *argv[])
     QGuiApplication::setApplicationName(QStringLiteral("Wavelane"));
     QGuiApplication::setOrganizationName(QStringLiteral("Wavelane"));
     QGuiApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+
+    // The same mark as the logo in the app, at every size the shell may ask for.
+    QIcon icon;
+    for (const int size : {16, 24, 32, 48, 64, 128, 256})
+        icon.addFile(QStringLiteral(":/icons/wavelane-%1.png").arg(size), QSize(size, size));
+    QGuiApplication::setWindowIcon(icon);
 
     QCommandLineParser parser;
     parser.setApplicationDescription(

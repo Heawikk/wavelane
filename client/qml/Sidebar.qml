@@ -50,29 +50,9 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 spacing: 10
 
-                Rectangle {
-                    width: 26
-                    height: 26
-                    color: Theme.accent
+                Logo {
+                    size: 30
                     anchors.verticalCenter: parent.verticalCenter
-
-                    Canvas {
-                        anchors.fill: parent
-                        onPaint: {
-                            const ctx = getContext("2d")
-                            ctx.reset()
-                            ctx.strokeStyle = "white"
-                            ctx.lineWidth = 1.7
-                            ctx.lineCap = "round"
-                            for (let i = 0; i < 3; ++i) {
-                                const y = 9 + i * 4.2
-                                ctx.beginPath()
-                                ctx.moveTo(4, y)
-                                ctx.bezierCurveTo(9, y - 4, 16, y + 4, 22, y)
-                                ctx.stroke()
-                            }
-                        }
-                    }
                 }
 
                 Text {

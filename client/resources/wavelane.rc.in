@@ -1,0 +1,29 @@
+// Windows resources: the executable's icon and its version information.
+// Configured by CMake so the icon path is absolute and the version follows the project.
+
+IDI_ICON1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/resources/wavelane.ico"
+
+1 VERSIONINFO
+FILEVERSION     @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+PRODUCTVERSION  @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
+FILEOS          0x00040004L
+FILETYPE        0x00000001L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "Wavelane\0"
+            VALUE "FileDescription",  "Wavelane\0"
+            VALUE "FileVersion",      "@PROJECT_VERSION@\0"
+            VALUE "InternalName",     "wavelane\0"
+            VALUE "OriginalFilename", "wavelane.exe\0"
+            VALUE "ProductName",      "Wavelane\0"
+            VALUE "ProductVersion",   "@PROJECT_VERSION@\0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 1200
+    END
+END

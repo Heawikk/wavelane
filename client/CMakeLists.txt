@@ -19,6 +19,11 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
 
 qt_standard_project_setup(REQUIRES 6.5)
 
+# The resource compiler is needed for the executable's icon on Windows.
+if(WIN32)
+    enable_language(RC)
+endif()
+
 qt_add_executable(wavelane
     src/main.cpp
     src/Settings.h           src/Settings.cpp
@@ -72,6 +77,7 @@ qt_add_qml_module(wavelane
         qml/ImportBanner.qml
         qml/VibeBackground.qml
         qml/Equalizer.qml
+        qml/Logo.qml
 )
 
 # Compiled for every graphics backend Qt supports, so the same file runs on
@@ -81,6 +87,26 @@ qt_add_shaders(wavelane "wavelane_shaders"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/qml/shaders"
     FILES qml/shaders/vibe.frag
 )
+
+# The window icon, at the sizes the shell asks for.
+qt_add_resources(wavelane "app_icons"
+    PREFIX "/icons"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources"
+    FILES
+        resources/wavelane-16.png
+        resources/wavelane-24.png
+        resources/wavelane-32.png
+        resources/wavelane-48.png
+        resources/wavelane-64.png
+        resources/wavelane-128.png
+        resources/wavelane-256.png
+)
+
+# ...and the icon of the .exe itself, which Explorer and the taskbar read.
+if(WIN32)
+    configure_file(resources/wavelane.rc.in "${CMAKE_CURRENT_BINARY_DIR}/wavelane.rc" @ONLY)
+    target_sources(wavelane PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/wavelane.rc")
+endif()
 
 target_include_directories(wavelane PRIVATE src)
 

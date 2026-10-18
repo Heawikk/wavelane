@@ -14,7 +14,6 @@ Item {
     property bool detailOpen: true
     property int tab: 0
 
-    signal toggleDetail()
     signal showConflicts()
 
     readonly property var tabs: [
@@ -58,52 +57,6 @@ Item {
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
-
-        SectionHeader {
-            Layout.fillWidth: true
-            number: "03"
-            title: qsTr("Коллекция")
-
-            Mono {
-                anchors.verticalCenter: parent.verticalCenter
-                visible: library.uploadStatus !== ""
-                text: library.uploadStatus
-                font.capitalization: Font.MixedCase
-                color: library.uploading ? Theme.accentText : Theme.muted
-                rightPadding: 8
-            }
-            // Adding music is for administrators; everyone else just listens.
-            FlatButton {
-                visible: auth.isAdmin && library.conflicts.length > 0
-                implicitHeight: 26
-                text: qsTr("Конфликты: %1").arg(library.conflicts.length)
-                onClicked: root.showConflicts()
-            }
-            FlatButton {
-                visible: auth.isAdmin
-                implicitHeight: 26
-                glyph: Theme.iFolder
-                text: qsTr("Импорт папки")
-                enabledWhen: !library.importActive
-                onClicked: root.openImport()
-            }
-            FlatButton {
-                visible: auth.isAdmin
-                implicitHeight: 26
-                glyph: Theme.iAdd
-                text: library.uploading ? qsTr("Загрузка…") : qsTr("Загрузить файлы")
-                enabledWhen: !library.uploading
-                onClicked: root.openUpload()
-            }
-            IconButton {
-                visible: root.tab < 3
-                glyph: Theme.iPanel
-                active: root.detailOpen
-                activeColor: Theme.accentText
-                tooltip: qsTr("Панель деталей · Ctrl+B")
-                onClicked: root.toggleDetail()
-            }
-        }
 
         Item {
             Layout.fillWidth: true
