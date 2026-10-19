@@ -41,6 +41,80 @@ Rectangle {
     // swallow touches so nothing underneath reacts
     MouseArea { anchors.fill: parent }
 
+    // --- swipes on the cover area ---
+    //! How far the player has been pulled down; the window adds it to its own position.
+    property real pull: 0
+    //! True while a finger is moving the player or the cover, so the window follows without easing.
+    property bool dragging: false
+    //! Sideways travel of the cover while it is swiped.
+    property real shift: 0
+
+    Behavior on pull {
+        enabled: !root.dragging
+        NumberAnimation { duration: 180; easing.type: Easing.OutCubic }
+    }
+    Behavior on shift {
+        enabled: !root.dragging
+        NumberAnimation { duration: 160; easing.type: Easing.OutCubic }
+    }
+
+    // Down closes the player, left skips to the next track, right likes the current one.
+    // Only the part above the seek bar listens, so the seek bar keeps its own dragging.
+    Item {
+        id: swipeZone
+
+        width: parent.width
+        height: parent.height * 0.58
+
+        DragHandler {
+            id: swipe
+
+            property string axis: ""
+            property real travelX: 0
+            property real travelY: 0
+
+            target: null
+            enabled: !root.lyricsOpen
+
+            onActiveChanged: {
+                if (active) {
+                    axis = ""
+                    travelX = 0
+                    travelY = 0
+                    root.dragging = true
+                    return
+                }
+                root.dragging = false
+                const dx = travelX
+                const dy = travelY
+                const how = axis
+                axis = ""
+                root.pull = 0
+                root.shift = 0
+                if (how === "v" && dy > 110) {
+                    root.closed()
+                } else if (how === "h" && player.hasTrack) {
+                    if (dx < -90)
+                        root.next()
+                    else if (dx > 90 && !player.currentTrack.liked)
+                        library.toggleLike(player.currentTrack.id)
+                }
+            }
+            onActiveTranslationChanged: {
+                if (!active)
+                    return
+                travelX = activeTranslation.x
+                travelY = activeTranslation.y
+                if (axis === "" && Math.max(Math.abs(travelX), Math.abs(travelY)) > 14)
+                    axis = Math.abs(travelY) > Math.abs(travelX) ? "v" : "h"
+                if (axis === "v")
+                    root.pull = Math.max(0, travelY)
+                else if (axis === "h")
+                    root.shift = travelX
+            }
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.leftMargin: 20
@@ -84,6 +158,8 @@ Rectangle {
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: Math.min(root.width - 40, root.height * 0.40)
             Layout.preferredHeight: Layout.preferredWidth
+            transform: Translate { x: root.shift * 0.6 }
+            opacity: 1 - Math.min(0.5, Math.abs(root.shift) / 400)
             coverPath: player.currentTrack.coverPath || ""
             title: player.currentTrack.title || ""
         }

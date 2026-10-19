@@ -25,6 +25,38 @@ Rectangle {
 
     TapHandler { onTapped: root.opened() }
 
+    // Up opens the full player; a swipe sideways skips to the next track.
+    DragHandler {
+        id: swipe
+
+        property real travelX: 0
+        property real travelY: 0
+
+        target: null
+
+        onActiveChanged: {
+            if (active) {
+                travelX = 0
+                travelY = 0
+                return
+            }
+            if (Math.abs(travelX) > Math.abs(travelY) && travelX < -80) {
+                if (player.context === "wave")
+                    wave.playNext()
+                else
+                    library.playNext()
+            } else if (Math.abs(travelY) > Math.abs(travelX) && travelY < -40) {
+                root.opened()
+            }
+        }
+        onActiveTranslationChanged: {
+            if (active) {
+                travelX = activeTranslation.x
+                travelY = activeTranslation.y
+            }
+        }
+    }
+
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: 12

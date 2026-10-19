@@ -102,6 +102,9 @@ ApplicationWindow {
         anchors.fill: parent
         visible: auth.signedIn
         spacing: 0
+        // The full player covers this, but touches (unlike mouse clicks) still reach the handlers
+        // underneath it, so the pages must be switched off while it is open.
+        enabled: !window.nowPlayingOpen
 
         // the strip with the page heading and its buttons
         Rectangle {
@@ -160,16 +163,46 @@ ApplicationWindow {
             }
         }
 
-        StackLayout {
+        Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             // the wave's glow runs behind the strip above it
             Layout.topMargin: window.page === "wave" ? -52 : 0
-            currentIndex: window.page === "search" ? 0 : window.page === "wave" ? 1 : 2
 
-            MobileSearchPage { id: searchPage }
-            WavePage { id: wavePage }
-            MobileCollectionPage { id: collectionPage }
+            StackLayout {
+                anchors.fill: parent
+                currentIndex: window.page === "search" ? 0 : window.page === "wave" ? 1 : 2
+
+                MobileSearchPage { id: searchPage }
+                WavePage { id: wavePage }
+                MobileCollectionPage { id: collectionPage }
+            }
+
+            // A swipe sideways turns to the next page along the tabs. Only sideways travel counts,
+            // so scrolling a list is left alone.
+            DragHandler {
+                id: pageSwipe
+
+                property real travelX: 0
+
+                target: null
+                yAxis.enabled: false
+                dragThreshold: 30
+
+                onActiveChanged: {
+                    if (active) {
+                        travelX = 0
+                        return
+                    }
+                    const order = ["search", "wave", "collection"]
+                    const at = order.indexOf(window.page)
+                    if (travelX < -80 && at < order.length - 1)
+                        window.showPage(order[at + 1])
+                    else if (travelX > 80 && at > 0)
+                        window.showPage(order[at - 1])
+                }
+                onActiveTranslationChanged: if (active) travelX = activeTranslation.x
+            }
         }
 
         MiniPlayer {
@@ -192,7 +225,8 @@ ApplicationWindow {
         id: nowPlaying
         width: parent.width
         height: parent.height
-        y: window.nowPlayingOpen && auth.signedIn ? 0 : height
+        // pull is how far a finger has dragged the player down; it follows the finger exactly
+        y: (window.nowPlayingOpen && auth.signedIn ? 0 : height) + pull
         visible: y < height
         lyricsOpen: window.lyricsOpen
         onClosed: {
@@ -202,6 +236,7 @@ ApplicationWindow {
         onLyricsToggled: window.lyricsOpen = !window.lyricsOpen
 
         Behavior on y {
+            enabled: !nowPlaying.dragging
             NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
         }
     }

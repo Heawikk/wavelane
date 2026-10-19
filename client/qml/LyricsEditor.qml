@@ -25,14 +25,17 @@ Popup {
     //! Something the administrator should know, shown under the text.
     property string message: ""
 
+    //! A phone: the editor takes the whole window (which the keyboard shrinks) and uses big touch targets.
+    readonly property bool compact: parent !== null && parent.width < 640
+
     parent: Overlay.overlay
     anchors.centerIn: parent
     modal: true
     dim: true
     focus: true
     padding: 0
-    width: Math.min(880, parent.width - 60)
-    height: Math.min(700, parent.height - 60)
+    width: compact ? parent.width : Math.min(880, parent.width - 60)
+    height: compact ? parent.height : Math.min(700, parent.height - 60)
     closePolicy: Popup.CloseOnEscape
 
     Overlay.modal: Rectangle { color: Theme.alpha("#000000", 0.6) }
@@ -110,6 +113,29 @@ Popup {
         return rows.join("\n")
     }
 
+    readonly property var modeOptions: [
+        { value: "text", label: qsTr("Текст") },
+        { value: "sync", label: qsTr("Синхронизация") }
+    ]
+
+    function pickMode(value) {
+        if (value === root.mode)
+            return
+        if (value === "sync")
+            root.enterSync()
+        else
+            root.leaveSync()
+    }
+
+    // Scroll the timing list so a line sits in the middle, without leaving blank room above the
+    // first line or below the last.
+    function centerOn(index) {
+        syncList.positionViewAtIndex(index, ListView.Center)
+        const lowest = syncList.originY
+        const highest = Math.max(lowest, syncList.originY + syncList.contentHeight - syncList.height)
+        syncList.contentY = Math.max(lowest, Math.min(highest, syncList.contentY))
+    }
+
     function enterSync() {
         const rows = parseText(textArea.text)
         if (rows.length === 0) {
@@ -127,7 +153,7 @@ Popup {
         root.cursor = first < syncModel.count ? first : 0
         root.mode = "sync"
         Qt.callLater(function() {
-            syncList.positionViewAtIndex(root.cursor, ListView.Center)
+            root.centerOn(root.cursor)
             syncList.forceActiveFocus()
         })
     }
@@ -143,7 +169,7 @@ Popup {
         syncModel.setProperty(root.cursor, "time", player.position)
         root.cursor = Math.min(root.cursor + 1, syncModel.count)
         countUntimed()
-        syncList.positionViewAtIndex(Math.min(root.cursor, syncModel.count - 1), ListView.Center)
+        root.centerOn(Math.min(root.cursor, syncModel.count - 1))
     }
 
     function undoStamp() {
@@ -156,7 +182,7 @@ Popup {
         // Back to just before where it was, so it can be heard again.
         if (was >= 0)
             player.seek(Math.max(0, was - 2500))
-        syncList.positionViewAtIndex(root.cursor, ListView.Center)
+        root.centerOn(root.cursor)
     }
 
     function openForCurrent() {
@@ -212,26 +238,62 @@ Popup {
 
         SectionHeader {
             Layout.fillWidth: true
+            visible: !root.compact
             title: qsTr("Текст · %1").arg(root.trackTitle)
 
             Segmented {
-                options: [
-                    { value: "text", label: qsTr("Текст") },
-                    { value: "sync", label: qsTr("Синхронизация") }
-                ]
+                options: root.modeOptions
                 current: root.mode
-                onPicked: function(value) {
-                    if (value === root.mode)
-                        return
-                    if (value === "sync")
-                        root.enterSync()
-                    else
-                        root.leaveSync()
-                }
+                onPicked: function(value) { root.pickMode(value) }
             }
             IconButton {
                 glyph: Theme.iClose
                 onClicked: root.close()
+            }
+        }
+
+        // --- the same on a phone: the title and the close button, the switch under them ---
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: root.compact
+            spacing: 0
+
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 52
+                Layout.leftMargin: 14
+                spacing: 8
+
+                Mono {
+                    Layout.fillWidth: true
+                    text: qsTr("Текст · %1").arg(root.trackTitle)
+                    elide: Text.ElideRight
+                    color: Theme.text
+                    font.weight: Font.DemiBold
+                    font.capitalization: Font.MixedCase
+                }
+                IconButton {
+                    size: 48
+                    glyph: Theme.iClose
+                    glyphSize: 20
+                    onClicked: root.close()
+                }
+            }
+            Segmented {
+                Layout.fillWidth: true
+                Layout.leftMargin: 12
+                Layout.rightMargin: 12
+                Layout.bottomMargin: 8
+                implicitHeight: 42
+                stretch: true
+                options: root.modeOptions
+                current: root.mode
+                onPicked: function(value) { root.pickMode(value) }
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                color: Theme.border
             }
         }
 
@@ -240,11 +302,13 @@ Popup {
             visible: root.mode === "text"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 16
+            Layout.margins: root.compact ? 12 : 16
             spacing: 10
 
             Text {
                 Layout.fillWidth: true
+                // out of the way once the keyboard is up and the room is needed
+                visible: !(root.compact && textArea.activeFocus)
                 text: qsTr("Вставьте текст песни. Если у строк уже есть метки времени "
                            + "(например, [01:23.45] строка), текст станет синхронизированным; "
                            + "иначе его можно синхронизировать на соседней вкладке.")
@@ -265,13 +329,13 @@ Popup {
 
                     color: Theme.text
                     selectByMouse: true
-                    wrapMode: TextEdit.NoWrap
+                    wrapMode: root.compact ? TextEdit.Wrap : TextEdit.NoWrap
                     leftPadding: 12
                     rightPadding: 12
                     topPadding: 10
                     bottomPadding: 10
                     font.family: Theme.monoFamily
-                    font.pixelSize: Theme.fontSmall + 1
+                    font.pixelSize: root.compact ? 16 : Theme.fontSmall + 1
                     placeholderText: qsTr("Текст песни…")
                     placeholderTextColor: Theme.faint
                     onTextChanged: root.message = ""
@@ -281,6 +345,30 @@ Popup {
                         border.color: textArea.activeFocus ? Theme.accent : Theme.borderStrong
                         border.width: 1
                     }
+                }
+            }
+
+            // long-press menus are fiddly on a phone, so the two usual moves get buttons
+            RowLayout {
+                Layout.fillWidth: true
+                visible: root.compact
+                spacing: 8
+
+                FlatButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 44
+                    text: qsTr("Вставить")
+                    onClicked: {
+                        textArea.forceActiveFocus()
+                        textArea.paste()
+                    }
+                }
+                FlatButton {
+                    Layout.fillWidth: true
+                    implicitHeight: 44
+                    text: qsTr("Очистить")
+                    enabledWhen: textArea.text !== ""
+                    onClicked: textArea.clear()
                 }
             }
 
@@ -306,15 +394,18 @@ Popup {
             visible: root.mode === "sync"
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.margins: 16
+            Layout.margins: root.compact ? 12 : 16
             Layout.bottomMargin: 8
             spacing: 10
 
             Text {
                 Layout.fillWidth: true
-                text: qsTr("Включите музыку и нажимайте «Отметить» (Enter) в тот момент, когда "
-                           + "начинается строка в рамке. Нажмите на любую строку, чтобы выбрать её "
-                           + "заново; «Отменить» (Backspace) возвращает на шаг назад.")
+                text: root.compact
+                      ? qsTr("Включите музыку и нажимайте «Отметить», когда начинается строка в рамке. "
+                             + "Нажатие на строку выбирает её заново.")
+                      : qsTr("Включите музыку и нажимайте «Отметить» (Enter) в тот момент, когда "
+                             + "начинается строка в рамке. Нажмите на любую строку, чтобы выбрать её "
+                             + "заново; «Отменить» (Backspace) возвращает на шаг назад.")
                 color: Theme.faint
                 font.family: Theme.sans
                 font.pixelSize: Theme.fontSmall
@@ -331,6 +422,10 @@ Popup {
                 currentIndex: root.cursor
                 boundsBehavior: Flickable.StopAtBounds
                 ScrollBar.vertical: FlatScrollBar {}
+
+                // The keyboard of the text tab leaves after the list has been placed, and the
+                // list grows; put the current line back in the middle.
+                onHeightChanged: if (root.mode === "sync") Qt.callLater(root.centerOn, root.cursor)
 
                 Keys.onReturnPressed: root.stamp()
                 Keys.onEnterPressed: root.stamp()
@@ -359,7 +454,7 @@ Popup {
                     readonly property bool isCursor: index === root.cursor
 
                     width: ListView.view.width
-                    height: 34
+                    height: root.compact ? 52 : 34
                     color: isCursor ? Theme.rowSelected : (rowMouse.containsMouse ? Theme.rowHover : "transparent")
 
                     Rectangle {
@@ -386,6 +481,8 @@ Popup {
                             height: parent.height
                             verticalAlignment: Text.AlignVCenter
                             text: row.text
+                            wrapMode: root.compact ? Text.WordWrap : Text.NoWrap
+                            maximumLineCount: root.compact ? 2 : 1
                             elide: Text.ElideRight
                             color: row.isCursor ? Theme.text : (row.time >= 0 ? Theme.muted : Theme.faint)
                             font.family: Theme.sans
@@ -410,6 +507,7 @@ Popup {
 
             RowLayout {
                 Layout.fillWidth: true
+                visible: !root.compact
                 spacing: 8
 
                 IconButton {
@@ -462,6 +560,73 @@ Popup {
             }
         }
 
+        // --- timing controls on a phone: playback and the position on one row, the two marks big below ---
+        ColumnLayout {
+            visible: root.mode === "sync" && root.compact
+            Layout.fillWidth: true
+            Layout.leftMargin: 12
+            Layout.rightMargin: 12
+            Layout.bottomMargin: 8
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                IconButton {
+                    size: 48
+                    glyph: player.playing ? Theme.iPause : Theme.iPlay
+                    glyphSize: 20
+                    filled: true
+                    onClicked: player.togglePlayPause()
+                }
+                FlatButton {
+                    implicitHeight: 44
+                    text: "−5 " + qsTr("с")
+                    onClicked: player.seek(Math.max(0, player.position - 5000))
+                }
+                FlatButton {
+                    implicitHeight: 44
+                    text: "+5 " + qsTr("с")
+                    onClicked: player.seek(player.position + 5000)
+                }
+                Item { Layout.fillWidth: true }
+                Mono {
+                    text: player.positionText + " / " + player.durationText
+                    color: Theme.muted
+                    font.capitalization: Font.MixedCase
+                }
+            }
+            Mono {
+                Layout.fillWidth: true
+                text: root.untimed > 0 ? qsTr("Без времени: %1").arg(root.untimed)
+                                       : qsTr("Все строки отмечены")
+                color: root.untimed > 0 ? Theme.warning : Theme.positive
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+
+                FlatButton {
+                    Layout.preferredWidth: 1
+                    Layout.fillWidth: true
+                    implicitHeight: 56
+                    text: qsTr("Отменить")
+                    enabledWhen: root.cursor > 0 || (root.lineCount > 0 && syncModel.get(0).time >= 0)
+                    onClicked: root.undoStamp()
+                }
+                FlatButton {
+                    Layout.preferredWidth: 2
+                    Layout.fillWidth: true
+                    implicitHeight: 56
+                    text: qsTr("Отметить")
+                    primary: true
+                    enabledWhen: root.cursor < root.lineCount
+                    onClicked: root.stamp()
+                }
+            }
+        }
+
         // --- actions ---
         Rectangle {
             Layout.fillWidth: true
@@ -475,23 +640,29 @@ Popup {
 
             FlatButton {
                 visible: lyrics.state !== "none" && lyrics.trackId === root.trackId
-                text: qsTr("Удалить текст")
+                implicitHeight: root.compact ? 48 : 30
+                text: root.compact ? qsTr("Удалить") : qsTr("Удалить текст")
                 danger: true
                 onClicked: confirmRemove.open()
             }
 
-            Item { Layout.fillWidth: true }
+            Item { Layout.fillWidth: !root.compact }
 
             FlatButton {
+                visible: !root.compact
                 text: qsTr("Закрыть")
                 onClicked: root.close()
             }
             FlatButton {
                 visible: root.mode === "text"
-                text: qsTr("Синхронизировать")
+                implicitHeight: root.compact ? 48 : 30
+                Layout.fillWidth: root.compact
+                text: root.compact ? qsTr("Синхрон.") : qsTr("Синхронизировать")
                 onClicked: root.enterSync()
             }
             FlatButton {
+                implicitHeight: root.compact ? 48 : 30
+                Layout.fillWidth: root.compact
                 text: lyrics.saving ? qsTr("Сохраняем…") : qsTr("Сохранить")
                 primary: true
                 enabledWhen: !lyrics.saving && (root.mode === "text" || root.untimed === 0)

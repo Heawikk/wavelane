@@ -14,7 +14,7 @@ Item {
 
     signal clicked()
 
-    implicitHeight: 30
+    implicitHeight: Theme.mobileIcons ? 40 : 30
     implicitWidth: content.implicitWidth + 2 * horizontalPadding
     opacity: enabledWhen ? 1.0 : 0.4
 
