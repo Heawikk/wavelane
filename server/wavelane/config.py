@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     access_token_ttl_minutes: int = 30
     refresh_token_ttl_days: int = 60
     allow_registration: bool = True
+    #: Slow down password guessing and account spam (per address and per account).
+    rate_limit_enabled: bool = True
+    #: JSON bodies above this are refused outright; uploads have their own limit.
+    max_json_body_bytes: int = 2 * 1024 * 1024
 
     # --- storage ------------------------------------------------------------
     database_url: str = "sqlite+aiosqlite:///./wavelane.db"
@@ -49,11 +53,37 @@ class Settings(BaseSettings):
     # --- api ----------------------------------------------------------------
     cors_origins: list[str] = Field(default_factory=lambda: ["*"])
     api_prefix: str = "/api/v1"
+    #: The interactive API pages. None means on in development, off in production.
+    docs_enabled: bool | None = None
 
     @field_validator("storage_root")
     @classmethod
     def _resolve_storage(cls, value: Path) -> Path:
         return value.expanduser().resolve()
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.strip().lower() == "production"
+
+    @property
+    def docs_visible(self) -> bool:
+        return self.docs_enabled if self.docs_enabled is not None else not self.is_production
+
+    def production_problems(self) -> list[str]:
+        """Things that must not be true of a server open to the internet."""
+        problems: list[str] = []
+        if "secret_key" not in self.model_fields_set:
+            problems.append(
+                "WAVELANE_SECRET_KEY is not set: a random key is made on every start, which "
+                "signs everybody out each time the server restarts"
+            )
+        elif len(self.secret_key) < 32 or "change-me" in self.secret_key.lower():
+            problems.append("WAVELANE_SECRET_KEY is a placeholder or shorter than 32 characters")
+        if self.debug:
+            problems.append("WAVELANE_DEBUG is on: set it to false")
+        if "*" in self.cors_origins:
+            problems.append("WAVELANE_CORS_ORIGINS contains \"*\": list the origins, or use []")
+        return problems
 
     @property
     def is_sqlite(self) -> bool:

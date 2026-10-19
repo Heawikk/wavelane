@@ -83,6 +83,8 @@ qt_add_qml_module(wavelane
         qml/ImportBanner.qml
         qml/VibeBackground.qml
         qml/Equalizer.qml
+        qml/Visualizer.qml
+        qml/RingVisualizer.qml
         qml/Logo.qml
         qml/LyricsView.qml
         qml/LyricsEditor.qml

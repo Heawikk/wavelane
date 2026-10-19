@@ -38,6 +38,8 @@ async def app_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("WAVELANE_ACCESS_TOKEN_TTL_MINUTES", "30")
     monkeypatch.setenv("WAVELANE_ALLOW_REGISTRATION", "true")
     monkeypatch.setenv("WAVELANE_ANALYZE_ON_UPLOAD", "true")
+    # The suite signs up dozens of accounts from one address; the limits have tests of their own.
+    monkeypatch.setenv("WAVELANE_RATE_LIMIT_ENABLED", "false")
     # Set to empty rather than deleted: an environment variable overrides the
     # developer's .env, which would otherwise leak a real ffmpeg path into the
     # tests and make their results depend on the machine. The DSP analyser has
@@ -47,7 +49,7 @@ async def app_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("WAVELANE_FFPROBE_PATH", "")
 
     from wavelane import config, db
-    from wavelane.services import audio_analysis, conflicts, imports
+    from wavelane.services import audio_analysis, conflicts, imports, ratelimit
     from wavelane.services import storage as storage_module
 
     config.get_settings.cache_clear()
@@ -58,6 +60,7 @@ async def app_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # in-memory state that must not leak from one test to the next
     conflicts._registry = None
     imports._manager = None
+    ratelimit._limiter = None
 
     settings = config.get_settings()
     settings.ensure_directories()
@@ -70,6 +73,7 @@ async def app_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     audio_analysis._analyzer = None
     conflicts._registry = None
     imports._manager = None
+    ratelimit._limiter = None
 
 
 @pytest.fixture

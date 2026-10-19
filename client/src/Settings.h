@@ -20,6 +20,10 @@ class Settings : public QObject
     Q_PROPERTY(QString serverUrl READ serverUrl WRITE setServerUrl NOTIFY serverUrlChanged)
     Q_PROPERTY(int volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
+    // Looks. The glowing blobs are the one expensive thing the client draws, so
+    // they can be switched off; the visualizer has several styles, or none.
+    Q_PROPERTY(bool blobsEnabled READ blobsEnabled WRITE setBlobsEnabled NOTIFY looksChanged)
+    Q_PROPERTY(QString visualizerStyle READ visualizerStyle WRITE setVisualizerStyle NOTIFY looksChanged)
     // Whether Discord shows what is playing (Rich Presence).
     Q_PROPERTY(bool discordEnabled READ discordEnabled WRITE setDiscordEnabled NOTIFY discordChanged)
 
@@ -34,6 +38,12 @@ public:
 
     bool muted() const;
     void setMuted(bool value);
+
+    bool blobsEnabled() const;
+    void setBlobsEnabled(bool value);
+    //! "bars", "wave", "dots", "ring" or "off".
+    QString visualizerStyle() const;
+    void setVisualizerStyle(const QString &style);
 
     bool discordEnabled() const;
     void setDiscordEnabled(bool value);
@@ -53,6 +63,7 @@ signals:
     void volumeChanged();
     void mutedChanged();
     void discordChanged();
+    void looksChanged();
 
 private:
     QSettings m_store;

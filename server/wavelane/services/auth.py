@@ -17,10 +17,10 @@ from .security import (
     AuthError,
     create_access_token,
     generate_refresh_token,
-    hash_password,
+    hash_password_async,
     hash_refresh_token,
     needs_rehash,
-    verify_password,
+    verify_password_async,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,7 +71,7 @@ class AuthService:
             email=email,
             username=username,
             display_name=(display_name or username).strip(),
-            password_hash=hash_password(password),
+            password_hash=await hash_password_async(password),
             is_admin=existing_users == 0,
         )
         self.session.add(user)
@@ -94,16 +94,16 @@ class AuthService:
         if user is None:
             # Spend the same time as a real verification would, so response
             # timing does not reveal whether an account exists.
-            hash_password(password)
+            await hash_password_async(password)
             raise AuthError("invalid credentials")
 
-        if not verify_password(password, user.password_hash):
+        if not await verify_password_async(password, user.password_hash):
             raise AuthError("invalid credentials")
         if not user.is_active:
             raise AuthError("account is disabled")
 
         if needs_rehash(user.password_hash):
-            user.password_hash = hash_password(password)
+            user.password_hash = await hash_password_async(password)
 
         user.last_seen_at = now_utc()
         return user
@@ -238,8 +238,8 @@ class AuthService:
     async def change_password(
         self, user: User, current_password: str, new_password: str
     ) -> None:
-        if not verify_password(current_password, user.password_hash):
+        if not await verify_password_async(current_password, user.password_hash):
             raise AuthError("current password is incorrect")
-        user.password_hash = hash_password(new_password)
+        user.password_hash = await hash_password_async(new_password)
         # A password change should log every other device out.
         await self.logout_all(user.id)

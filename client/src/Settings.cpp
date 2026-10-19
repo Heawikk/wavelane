@@ -9,6 +9,8 @@ constexpr auto kLastLogin = "session/lastLogin";
 constexpr auto kVolume = "playback/volume";
 constexpr auto kMuted = "playback/muted";
 constexpr auto kDiscordEnabled = "discord/enabled";
+constexpr auto kBlobs = "looks/blobs";
+constexpr auto kVisualizer = "looks/visualizer";
 constexpr auto kDefaultServer = "http://127.0.0.1:8000";
 } // namespace
 
@@ -59,6 +61,36 @@ void Settings::setMuted(bool value)
         return;
     m_store.setValue(kMuted, value);
     emit mutedChanged();
+}
+
+bool Settings::blobsEnabled() const
+{
+    return m_store.value(kBlobs, true).toBool();
+}
+
+void Settings::setBlobsEnabled(bool value)
+{
+    if (value == blobsEnabled())
+        return;
+    m_store.setValue(kBlobs, value);
+    emit looksChanged();
+}
+
+QString Settings::visualizerStyle() const
+{
+    static const QStringList known{QStringLiteral("bars"), QStringLiteral("wave"),
+                                   QStringLiteral("dots"), QStringLiteral("ring"),
+                                   QStringLiteral("off")};
+    const QString stored = m_store.value(kVisualizer, QStringLiteral("bars")).toString();
+    return known.contains(stored) ? stored : QStringLiteral("bars");
+}
+
+void Settings::setVisualizerStyle(const QString &style)
+{
+    if (style == visualizerStyle())
+        return;
+    m_store.setValue(kVisualizer, style);
+    emit looksChanged();
 }
 
 bool Settings::discordEnabled() const

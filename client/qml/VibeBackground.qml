@@ -22,7 +22,8 @@ Item {
     property color colorB: "#8a5cff"
     property color colorC: "#27c9e8"
 
-    //! Seconds of animation; sped up by loudness. Read by the rest of the page.
+    //! Seconds of animation, advanced by the page that owns this (faster when it is
+    //! loud), so the page can stop the clock altogether when nothing moves.
     property real clock: 0
 
     //! A coloured wave that passes through the blobs, used to answer a like or a dislike.
@@ -47,12 +48,6 @@ Item {
     Behavior on colorA { ColorAnimation { duration: 1100 } }
     Behavior on colorB { ColorAnimation { duration: 1100 } }
     Behavior on colorC { ColorAnimation { duration: 1100 } }
-
-    // Paused with the page, so nothing is drawn while it is hidden.
-    FrameAnimation {
-        running: root.visible
-        onTriggered: root.clock += frameTime * (0.55 + 1.1 * root.level)
-    }
 
     ShaderEffect {
         id: effect

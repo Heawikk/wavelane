@@ -16,6 +16,15 @@ Item {
     readonly property bool waveActive: wave.started && player.hasTrack
                                        && player.context === "wave"
     readonly property bool audible: player.playing
+
+    // The looks the listener chose in the settings.
+    readonly property bool blobsOn: app.blobsEnabled
+    readonly property string vizStyle: app.visualizerStyle
+
+    //! Seconds of animation, running faster the louder the music is. It only
+    //! advances while something on the page is actually moving, so with the blobs
+    //! and the visualizer both off the page costs nothing to keep open.
+    property real clock: 0
     readonly property var tap: player.spectrum
 
     // A colour set for each mood, so changing the dial visibly changes the page.
@@ -32,7 +41,7 @@ Item {
 
     // What drives the picture: the real analysis while music plays, and a slow
     // breathing of its own otherwise.
-    readonly property real breath: 0.5 + 0.5 * Math.sin(vibe.clock * 0.9)
+    readonly property real breath: 0.5 + 0.5 * Math.sin(root.clock * 0.9)
 
     // How much the music, rather than the breathing, is in charge. It glides
     // between the two, so starting or pausing swells or settles the blobs
@@ -64,8 +73,9 @@ Item {
     property var shownBands: idleBands
 
     FrameAnimation {
-        running: root.visible
+        running: root.visible && (root.blobsOn || root.vizStyle !== "off")
         onTriggered: {
+            root.clock += frameTime * (0.55 + 1.1 * root.level)
             if (root.audible) {
                 root.heldLevel = root.tap.level
                 root.heldBass = root.tap.bass
@@ -87,7 +97,8 @@ Item {
 
     //! Wash the blobs with the colour of a reaction.
     function pulse(color, strength) {
-        vibe.pulse(color, strength)
+        if (vibeLoader.item)
+            vibeLoader.item.pulse(color, strength)
     }
 
     function toggle() {
@@ -97,16 +108,22 @@ Item {
             player.togglePlayPause()
     }
 
-    VibeBackground {
-        id: vibe
+    // Not loaded at all when switched off, so the shader costs the GPU nothing.
+    Loader {
+        id: vibeLoader
         anchors.fill: parent
-        level: root.level
-        bass: root.bass
-        mid: root.mid
-        treble: root.treble
-        colorA: root.colors[0]
-        colorB: root.colors[1]
-        colorC: root.colors[2]
+        active: root.blobsOn
+
+        sourceComponent: VibeBackground {
+            clock: root.clock
+            level: root.level
+            bass: root.bass
+            mid: root.mid
+            treble: root.treble
+            colorA: root.colors[0]
+            colorB: root.colors[1]
+            colorC: root.colors[2]
+        }
     }
 
     ColumnLayout {
@@ -156,7 +173,8 @@ Item {
 
         RowLayout {
             Layout.alignment: Qt.AlignHCenter
-            spacing: 26
+            // room for the ring of rays around the play button
+            spacing: root.vizStyle === "ring" ? 46 : 26
 
             // the wave has no "previous", but the row keeps its shape
             RoundButton {
@@ -179,7 +197,7 @@ Item {
                     border.color: Qt.rgba(1, 1, 1, 0.10 + 0.40 * root.level)
                     border.width: 1
                     opacity: root.alive
-                    visible: root.alive > 0.01
+                    visible: root.alive > 0.01 && root.vizStyle !== "ring"
                 }
                 Rectangle {
                     anchors.centerIn: parent
@@ -190,7 +208,19 @@ Item {
                     border.color: Qt.rgba(1, 1, 1, 0.05 + 0.20 * root.level)
                     border.width: 1
                     opacity: root.alive
-                    visible: root.alive > 0.01
+                    visible: root.alive > 0.01 && root.vizStyle !== "ring"
+                }
+
+                // the "ring" style: the spectrum as rays around the button
+                Loader {
+                    x: parent.width / 2
+                    y: parent.height / 2
+                    active: root.vizStyle === "ring"
+
+                    sourceComponent: RingVisualizer {
+                        bands: root.shownBands
+                        tint: Qt.lighter(root.colors[2], 1.25)
+                    }
                 }
 
                 RoundButton {
@@ -214,9 +244,11 @@ Item {
             }
         }
 
-        Equalizer {
+        Visualizer {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 18
+            visible: root.vizStyle === "bars" || root.vizStyle === "wave" || root.vizStyle === "dots"
+            style: root.vizStyle
             tint: Qt.lighter(root.colors[2], 1.25)
             bands: root.shownBands
         }
@@ -226,7 +258,7 @@ Item {
     readonly property var idleBands: {
         const out = []
         for (let i = 0; i < 32; ++i)
-            out.push(0.03 + 0.05 * (0.5 + 0.5 * Math.sin(vibe.clock * 1.6 - i * 0.45)))
+            out.push(0.03 + 0.05 * (0.5 + 0.5 * Math.sin(root.clock * 1.6 - i * 0.45)))
         return out
     }
 }

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import or_, select
 
 from ...models import Playlist, User
@@ -25,9 +25,12 @@ from ...services.library import (
     remove_playlist_track,
     reorder_playlist,
 )
-from ..deps import CurrentUser, DbSession, OptionalUser, PageParams
+from ..deps import CurrentUser, DbSession, OptionalUser, PageParams, get_current_user
 
-router = APIRouter(prefix="/playlists", tags=["playlists"])
+# Even "public" playlists are public to the people with an account, not to the internet.
+router = APIRouter(
+    prefix="/playlists", tags=["playlists"], dependencies=[Depends(get_current_user)]
+)
 
 
 async def _load_playlist(

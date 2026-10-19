@@ -57,8 +57,8 @@ async def test_reaction_shows_up_on_track_responses(client, api, account, upload
     listing = await client.get(f"{api}/tracks", headers=account.headers)
     assert listing.json()["items"][0]["liked"] is True
 
-    anonymous = await client.get(f"{api}/tracks")
-    assert anonymous.json()["items"][0]["liked"] is None
+    # The catalogue is for people with an account.
+    assert (await client.get(f"{api}/tracks")).status_code == 401
 
 
 async def test_playlist_lifecycle(client, api, account, upload_track):

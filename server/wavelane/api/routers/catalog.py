@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated, Literal
 
 import anyio
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 
 from ...models import Album, Artist, Genre, Track, TrackArtist, TrackGenre
@@ -35,9 +35,18 @@ from ...services.catalog import (
 )
 from ...services.removal import delete_tracks, unlink_audio
 from ...utils import normalize_name, slugify
-from ..deps import AdminUser, CurrentUser, DbSession, FileStorage, OptionalUser, PageParams
+from ..deps import (
+    AdminUser,
+    CurrentUser,
+    DbSession,
+    FileStorage,
+    OptionalUser,
+    PageParams,
+    get_current_user,
+)
 
-router = APIRouter(tags=["catalogue"])
+# Nothing in the catalogue is public: browsing it needs an account, like streaming does.
+router = APIRouter(tags=["catalogue"], dependencies=[Depends(get_current_user)])
 
 TrackSort = Literal["popular", "recent", "title", "duration"]
 

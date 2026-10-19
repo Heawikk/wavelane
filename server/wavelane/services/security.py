@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import secrets
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal
@@ -37,6 +39,23 @@ def verify_password(password: str, password_hash: str) -> bool:
     except (VerifyMismatchError, VerificationError, InvalidHashError):
         return False
     return True
+
+
+# Hashing is deliberately slow (about 64 MiB and a few tens of milliseconds), so
+# it must not run on the event loop, where one login attempt would stop every
+# stream; and only a couple may run at once, so a flood of attempts queues
+# instead of eating all the memory. The executor does not belong to any loop.
+_hash_pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="argon2")
+
+
+async def hash_password_async(password: str) -> str:
+    return await asyncio.get_running_loop().run_in_executor(_hash_pool, hash_password, password)
+
+
+async def verify_password_async(password: str, password_hash: str) -> bool:
+    return await asyncio.get_running_loop().run_in_executor(
+        _hash_pool, verify_password, password, password_hash
+    )
 
 
 def needs_rehash(password_hash: str) -> bool:

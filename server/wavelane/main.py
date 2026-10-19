@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -28,6 +29,7 @@ from .api.routers import (
 )
 from .config import Settings, get_settings
 from .db import dispose_engine, get_session_factory, init_models
+from .middleware import BodyLimitMiddleware, SecurityHeadersMiddleware, TokenRedactingFilter
 from .services.audio_analysis import get_analyzer
 
 logger = logging.getLogger("wavelane")
@@ -53,6 +55,7 @@ def configure_logging(settings: Settings) -> None:
     # These are chatty at DEBUG and say nothing useful here.
     logging.getLogger("aiosqlite").setLevel(logging.WARNING)
     logging.getLogger("multipart").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").addFilter(TokenRedactingFilter())
 
 
 @asynccontextmanager
@@ -95,17 +98,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings)
 
+    if settings.is_production:
+        problems = settings.production_problems()
+        if problems:
+            # Fail closed: a server meant for the internet must not start half-configured.
+            raise RuntimeError(
+                "WAVELANE_ENVIRONMENT=production, but: " + "; ".join(problems)
+            )
+
+    docs = settings.docs_visible
     app = FastAPI(
         title=settings.app_name,
         description=DESCRIPTION,
         version=__version__,
         lifespan=lifespan,
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
     )
     app.state.settings = settings
 
+    # Added last runs first: the body check sees a request before anything reads it.
+    app.add_middleware(SecurityHeadersMiddleware, lock_down=not docs)
+    app.add_middleware(
+        BodyLimitMiddleware,
+        limit=settings.max_json_body_bytes,
+        exempt=re.compile(r"/upload/?$"),
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -154,7 +173,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             "name": settings.app_name,
             "version": __version__,
             "api": settings.api_prefix,
-            "docs": "/docs",
         }
 
     return app

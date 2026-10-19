@@ -98,10 +98,13 @@ def pagination(
 
 
 def client_ip(request: Request) -> str | None:
-    """Best-effort client address, honouring a single reverse proxy."""
-    forwarded = request.headers.get("x-forwarded-for")
-    if forwarded:
-        return forwarded.split(",")[0].strip()[:64]
+    """The address the request really came from.
+
+    X-Forwarded-For is deliberately not read here: any caller can write it, and
+    this address keys the rate limits. Behind a reverse proxy, uvicorn replaces
+    the peer address with the forwarded one, but only for proxies listed in
+    --forwarded-allow-ips (127.0.0.1 by default), so what arrives here can be trusted.
+    """
     return request.client.host if request.client else None
 
 
