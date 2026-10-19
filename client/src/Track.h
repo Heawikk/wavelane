@@ -30,6 +30,8 @@ struct Track
     bool liked = false;
     bool disliked = false;
     QStringList genres;
+    //! "none", "plain" or "synced": whether there are words, and whether they follow the music.
+    QString lyricsKind = QStringLiteral("none");
 
     // Only populated for wave picks.
     QString streamUrl;

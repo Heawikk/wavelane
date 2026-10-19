@@ -25,6 +25,25 @@ Item {
     //! Seconds of animation; sped up by loudness. Read by the rest of the page.
     property real clock: 0
 
+    //! A coloured wave that passes through the blobs, used to answer a like or a dislike.
+    property real flash: 0
+    property color flashColor: "#ff3b5c"
+
+    //! Wash the blobs with `color` and let it fade; `strength` is 0..1.
+    function pulse(color, strength) {
+        flashColor = color
+        flashAnimation.stop()
+        flashAnimation.peak = strength
+        flashAnimation.start()
+    }
+
+    SequentialAnimation {
+        id: flashAnimation
+        property real peak: 1
+        NumberAnimation { target: root; property: "flash"; to: flashAnimation.peak; duration: 260; easing.type: Easing.OutCubic }
+        NumberAnimation { target: root; property: "flash"; to: 0; duration: 1400; easing.type: Easing.InOutQuad }
+    }
+
     Behavior on colorA { ColorAnimation { duration: 1100 } }
     Behavior on colorB { ColorAnimation { duration: 1100 } }
     Behavior on colorC { ColorAnimation { duration: 1100 } }
@@ -45,10 +64,12 @@ Item {
         property real mid: root.mid
         property real treble: root.treble
         property real aspect: width / Math.max(1, height)
+        property real flash: root.flash
         property color colorA: root.colorA
         property color colorB: root.colorB
         property color colorC: root.colorC
         property color background: Theme.bg
+        property color flashColor: root.flashColor
 
         fragmentShader: "qrc:/shaders/vibe.frag.qsb"
     }

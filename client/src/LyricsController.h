@@ -61,6 +61,8 @@ signals:
     void activeIndexChanged();
     void savingChanged();
     void saved(const QString &trackId);
+    //! What kind of lyrics a track has now; lists show a mark for it.
+    void kindChanged(const QString &trackId, const QString &kind);
     void notify(const QString &message);
 
 private:

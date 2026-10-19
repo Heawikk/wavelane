@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import Field, computed_field
 
 from ..models.enums import AlbumType, AnalysisSource, ArtistRole, TrackStatus
+from ..services.lyrics import parse_lyrics
 from .common import ORMModel
 
 
@@ -104,6 +106,9 @@ class TrackOut(ORMModel):
     artists: list[ArtistCredit] = Field(default_factory=list)
     genres: list[str] = Field(default_factory=list)
     features: AudioFeatureOut | None = None
+    #: Whether the track has words, and whether they follow the music; lists
+    #: show a mark for it, so it comes with the track instead of a request each.
+    lyrics_kind: Literal["none", "plain", "synced"] = "none"
     # Filled in by the API for the requesting user.
     liked: bool | None = None
     disliked: bool | None = None
@@ -159,6 +164,7 @@ class TrackOut(ORMModel):
                 if include_features and track.features
                 else None
             ),
+            lyrics_kind=parse_lyrics(track.lyrics).kind,
             liked=liked,
             disliked=disliked,
         )

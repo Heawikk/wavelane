@@ -43,17 +43,23 @@ Player::Player(ApiClient *api, Settings *settings, QObject *parent)
 
     // Set only to reproduce the stall for diagnosis; normally it is repaired.
     // Headphones plugged in or out, or the default output changed in Windows.
-    // The device list tends to change in bursts, so act once it has settled.
+    // The stream moves at the first sign of it, so the gap in the sound is as
+    // short as the backend allows; the device list tends to change in bursts, so
+    // it is looked at once more when the burst is over.
     m_outputSettle.setSingleShot(true);
-    m_outputSettle.setInterval(400);
+    m_outputSettle.setInterval(150);
     connect(&m_outputSettle, &QTimer::timeout, this, &Player::followDefaultOutput);
     m_outputGrace.setSingleShot(true);
     m_outputGrace.setInterval(4000);
+    m_outputCheck.setSingleShot(true);
+    m_outputCheck.setInterval(500);
+    connect(&m_outputCheck, &QTimer::timeout, this, &Player::recoverAfterOutputChange);
     connect(&m_devices, &QMediaDevices::audioOutputsChanged, this, [this]() {
         qCInfo(lcPlayer) << "audio outputs changed; default is"
                          << QMediaDevices::defaultAudioOutput().description();
         // Errors raised by the old device going away are not the track's fault.
         m_outputGrace.start();
+        followDefaultOutput();
         m_outputSettle.start();
     });
     m_recoverStalls = !qEnvironmentVariableIsSet("WAVELANE_NO_RECOVER");
@@ -318,6 +324,14 @@ void Player::applyReaction(const QString &trackId, bool liked, bool disliked)
     emit currentTrackChanged();
 }
 
+void Player::applyLyricsKind(const QString &trackId, const QString &kind)
+{
+    if (!m_current.isValid() || m_current.id != trackId || m_current.lyricsKind == kind)
+        return;
+    m_current.lyricsKind = kind;
+    emit currentTrackChanged();
+}
+
 void Player::reportAndClear(bool skipped)
 {
     if (!m_current.isValid() || m_reported) {
@@ -423,7 +437,7 @@ void Player::followDefaultOutput()
     }
 
     // Give the backend a moment to move the stream, then make sure it is alive.
-    QTimer::singleShot(700, this, &Player::recoverAfterOutputChange);
+    m_outputCheck.start();
 }
 
 void Player::recoverAfterOutputChange()

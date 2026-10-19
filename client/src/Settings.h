@@ -20,11 +20,8 @@ class Settings : public QObject
     Q_PROPERTY(QString serverUrl READ serverUrl WRITE setServerUrl NOTIFY serverUrlChanged)
     Q_PROPERTY(int volume READ volume WRITE setVolume NOTIFY volumeChanged)
     Q_PROPERTY(bool muted READ muted WRITE setMuted NOTIFY mutedChanged)
-    // Discord Rich Presence. The application id comes from the user's own
-    // Discord developer application, so it is a setting, not a constant.
+    // Whether Discord shows what is playing (Rich Presence).
     Q_PROPERTY(bool discordEnabled READ discordEnabled WRITE setDiscordEnabled NOTIFY discordChanged)
-    Q_PROPERTY(QString discordClientId READ discordClientId WRITE setDiscordClientId NOTIFY discordChanged)
-    Q_PROPERTY(QString discordCoverBase READ discordCoverBase WRITE setDiscordCoverBase NOTIFY discordChanged)
 
 public:
     explicit Settings(QObject *parent = nullptr);
@@ -40,11 +37,6 @@ public:
 
     bool discordEnabled() const;
     void setDiscordEnabled(bool value);
-    QString discordClientId() const;
-    void setDiscordClientId(const QString &id);
-    //! Public address of the server, so Discord can fetch covers. Empty if there is none.
-    QString discordCoverBase() const;
-    void setDiscordCoverBase(const QString &url);
 
     QString refreshToken() const;
     void setRefreshToken(const QString &token);

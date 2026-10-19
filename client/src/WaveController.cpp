@@ -342,6 +342,12 @@ void WaveController::applyReaction(const QString &trackId, bool liked, bool disl
     m_history->setReaction(trackId, liked, disliked);
 }
 
+void WaveController::applyLyricsKind(const QString &trackId, const QString &kind)
+{
+    m_queue->setLyricsKind(trackId, kind);
+    m_history->setLyricsKind(trackId, kind);
+}
+
 void WaveController::removeTracks(const QStringList &trackIds)
 {
     for (const QString &id : trackIds) {

@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QElapsedTimer>
 #include <QJsonObject>
+#include <QLocalServer>
 #include <QLocalSocket>
 #include <QObject>
 #include <QString>
@@ -16,14 +17,12 @@ class Settings;
 /*!
  * Shows what is playing in the user's Discord profile ("Listening to Wavelane").
  *
- * Discord's desktop app listens on a local pipe, and Rich Presence is a small
- * binary protocol over it: a handshake carrying the application id, then
- * "set activity" frames. No SDK is needed and nothing leaves the machine except
- * through Discord itself.
+ * This class decides what the activity says. The conversation with Discord
+ * itself is held by a helper process (see DiscordRelay), so that the presence
+ * is taken down whenever the client goes away, however it goes.
  *
- * The application id belongs to the user's own application on Discord's
- * developer portal, since the name Discord shows ("Wavelane") is that
- * application's name.
+ * The application on Discord's side is Wavelane's own, so its id is a constant
+ * and the only choice left to the user is whether to show anything at all.
  */
 class DiscordPresence : public QObject
 {
@@ -36,50 +35,48 @@ class DiscordPresence : public QObject
 
 public:
     DiscordPresence(Player *player, ApiClient *api, Settings *settings, QObject *parent = nullptr);
+    ~DiscordPresence() override;
 
     QString status() const { return m_status; }
     bool connected() const { return m_state == State::Ready; }
 
-    //! Apply the current settings: connect, reconnect or disconnect as needed.
+    //! Apply the current settings: start or stop showing the presence.
     Q_INVOKABLE void refresh();
 
 signals:
     void statusChanged();
 
 private:
-    enum class State { Disabled, NoClientId, Searching, Connecting, Ready, Failed };
+    enum class State { Disabled, Starting, Searching, Connecting, Ready, Failed };
 
     void setState(State state, const QString &detail = {});
-    void connectToDiscord();
-    void tryPipe(int index);
-    void scheduleRetry(int milliseconds);
-    void closeConnection();
+    void startRelay();
+    void stopRelay();
+    void onRelayConnected();
+    void onRelayData();
+    void scheduleRespawn(int milliseconds);
 
-    void sendFrame(int opcode, const QJsonObject &payload);
-    void onReadyRead();
-    void handleFrame(int opcode, const QJsonObject &payload);
-
+    void send(const QJsonObject &message);
     void scheduleActivity();
     void sendActivity();
     QJsonObject buildActivity() const;
+    QString coverBase() const;
     QString coverUrl(const QString &coverPath) const;
 
     Player *m_player = nullptr;
     ApiClient *m_api = nullptr;
     Settings *m_settings = nullptr;
 
-    QLocalSocket m_socket;
-    QByteArray m_buffer;
-    QTimer m_retryTimer;
+    QLocalServer m_server;
+    QLocalSocket *m_relay = nullptr;
+    QByteArray m_inbox;
+    QTimer m_respawnTimer;
+    //! Waiting for a helper that was launched to connect.
+    QTimer m_launchTimer;
     QTimer m_updateTimer;
     QElapsedTimer m_lastSent;
 
     State m_state = State::Disabled;
     QString m_status;
-    int m_pipeIndex = 0;
-    int m_firstPipe = 0;
     bool m_hadActivity = false;
-    //! Set while this class is closing the socket itself, so that is not mistaken
-    //! for Discord dropping the connection.
-    bool m_closing = false;
 };

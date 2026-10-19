@@ -33,10 +33,62 @@ Item {
     // What drives the picture: the real analysis while music plays, and a slow
     // breathing of its own otherwise.
     readonly property real breath: 0.5 + 0.5 * Math.sin(vibe.clock * 0.9)
-    readonly property real level: audible ? tap.level : 0.10 + 0.05 * breath
-    readonly property real bass: audible ? tap.bass : 0.08 + 0.10 * breath
-    readonly property real mid: audible ? tap.mid : 0.06 + 0.05 * breath
-    readonly property real treble: audible ? tap.treble : 0.03
+
+    // How much the music, rather than the breathing, is in charge. It glides
+    // between the two, so starting or pausing swells or settles the blobs
+    // instead of snapping them from one picture to the other.
+    property real alive: audible ? 1 : 0
+    Behavior on alive {
+        NumberAnimation { duration: 1300; easing.type: Easing.InOutSine }
+    }
+
+    // The last analysis heard, held while nothing plays so the fade has
+    // something to fade from.
+    property real heldLevel: 0
+    property real heldBass: 0
+    property real heldMid: 0
+    property real heldTreble: 0
+    property var heldBands: []
+
+    readonly property real idleLevel: 0.10 + 0.05 * breath
+    readonly property real idleBass: 0.08 + 0.10 * breath
+    readonly property real idleMid: 0.06 + 0.05 * breath
+    readonly property real idleTreble: 0.03
+
+    readonly property real level: idleLevel + (heldLevel - idleLevel) * alive
+    readonly property real bass: idleBass + (heldBass - idleBass) * alive
+    readonly property real mid: idleMid + (heldMid - idleMid) * alive
+    readonly property real treble: idleTreble + (heldTreble - idleTreble) * alive
+
+    // The bars, blended the same way.
+    property var shownBands: idleBands
+
+    FrameAnimation {
+        running: root.visible
+        onTriggered: {
+            if (root.audible) {
+                root.heldLevel = root.tap.level
+                root.heldBass = root.tap.bass
+                root.heldMid = root.tap.mid
+                root.heldTreble = root.tap.treble
+                root.heldBands = root.tap.bands
+            }
+            const idle = root.idleBands
+            const held = root.heldBands
+            const a = root.alive
+            const out = []
+            for (let i = 0; i < 32; ++i) {
+                const h = held && held.length > i ? held[i] : 0
+                out.push(idle[i] + (h - idle[i]) * a)
+            }
+            root.shownBands = out
+        }
+    }
+
+    //! Wash the blobs with the colour of a reaction.
+    function pulse(color, strength) {
+        vibe.pulse(color, strength)
+    }
 
     function toggle() {
         if (!root.waveActive)
@@ -126,7 +178,8 @@ Item {
                     color: "transparent"
                     border.color: Qt.rgba(1, 1, 1, 0.10 + 0.40 * root.level)
                     border.width: 1
-                    visible: root.audible
+                    opacity: root.alive
+                    visible: root.alive > 0.01
                 }
                 Rectangle {
                     anchors.centerIn: parent
@@ -136,7 +189,8 @@ Item {
                     color: "transparent"
                     border.color: Qt.rgba(1, 1, 1, 0.05 + 0.20 * root.level)
                     border.width: 1
-                    visible: root.audible
+                    opacity: root.alive
+                    visible: root.alive > 0.01
                 }
 
                 RoundButton {
@@ -164,7 +218,7 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 18
             tint: Qt.lighter(root.colors[2], 1.25)
-            bands: root.audible ? root.tap.bands : root.idleBands
+            bands: root.shownBands
         }
     }
 

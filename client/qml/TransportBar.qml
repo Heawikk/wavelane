@@ -15,6 +15,12 @@ Rectangle {
     property bool lyricsOpen: false
 
     signal toggleLyrics()
+    //! A dislike was given to the wave's track; the library path reports its own.
+    signal waveDisliked()
+
+    //! Where the reaction sparks start from.
+    readonly property Item likeButton: likeBtn
+    readonly property Item dislikeButton: dislikeBtn
 
     function next() {
         if (waveContext)
@@ -27,6 +33,7 @@ Rectangle {
         if (!player.hasTrack)
             return
         if (waveContext) {
+            root.waveDisliked()
             wave.dislike()
         } else {
             library.toggleDislike(player.currentTrack.id)
@@ -156,6 +163,7 @@ Rectangle {
 
         // --- reactions ---
         IconButton {
+            id: likeBtn
             glyph: player.hasTrack && player.currentTrack.liked ? Theme.iHeartFill : Theme.iHeart
             enabledWhen: player.hasTrack
             active: player.hasTrack && player.currentTrack.liked
@@ -164,6 +172,7 @@ Rectangle {
             onClicked: library.toggleLike(player.currentTrack.id)
         }
         IconButton {
+            id: dislikeBtn
             glyph: Theme.iDislike
             enabledWhen: player.hasTrack
             tooltip: qsTr("Не нравится · D")

@@ -517,6 +517,12 @@ void LibraryController::uploadFiles(const QList<QUrl> &fileUrls)
     });
 }
 
+void LibraryController::applyLyricsKind(const QString &trackId, const QString &kind)
+{
+    for (TrackListModel *model : {m_searchResults, m_liked, m_catalogue})
+        model->setLyricsKind(trackId, kind);
+}
+
 void LibraryController::clear()
 {
     m_searchResults->clear();

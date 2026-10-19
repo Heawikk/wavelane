@@ -191,6 +191,7 @@ Item {
                     genres: player.currentTrack.genres || []
                     liked: player.currentTrack.liked || false
                     isExplicit: player.currentTrack.explicit || false
+                    lyricsKind: player.currentTrack.lyricsKind || "none"
                     playingNow: true
                     showReason: true
                     selected: root.selectedId === trackId
@@ -240,6 +241,7 @@ Item {
                 genres: model.genres
                 liked: model.liked
                 isExplicit: model.isExplicit
+                lyricsKind: model.lyricsKind
                 selected: root.selectedId === trackId
                 playingNow: player.hasTrack && player.currentTrack.id === trackId
                             && !root.showNowPlaying

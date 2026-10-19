@@ -85,6 +85,8 @@ public:
 
     //! Keep the like/dislike flags of the playing track in step with the library.
     void applyReaction(const QString &trackId, bool liked, bool disliked);
+    //! The same for the lyrics mark, after an administrator edited the text.
+    void applyLyricsKind(const QString &trackId, const QString &kind);
 
     //! Stop and forget the current track if it was just deleted from the library.
     void dropIfDeleted(const QStringList &trackIds);
@@ -133,6 +135,8 @@ private:
     QMediaDevices m_devices;
     QTimer m_outputSettle;
     QTimer m_outputGrace;
+    //! Looks, a moment after the stream was moved, whether it is playing.
+    QTimer m_outputCheck;
     //! The listener has not paused: playback should continue across a device change.
     bool m_wantPlaying = false;
 

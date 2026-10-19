@@ -43,6 +43,7 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const
     case ScoreRole:      return track.score;
     case ReasonRole:     return track.reasonSummary;
     case FeaturesRole:   return track.features;
+    case LyricsKindRole: return track.lyricsKind;
     case TrackRole:      return track.toVariantMap();
     default:             return {};
     }
@@ -69,6 +70,7 @@ QHash<int, QByteArray> TrackListModel::roleNames() const
         {ScoreRole,      QByteArrayLiteral("score")},
         {ReasonRole,     QByteArrayLiteral("reason")},
         {FeaturesRole,   QByteArrayLiteral("features")},
+        {LyricsKindRole, QByteArrayLiteral("lyricsKind")},
         {TrackRole,      QByteArrayLiteral("track")},
     };
 }
@@ -132,6 +134,16 @@ void TrackListModel::setReaction(const QString &trackId, bool liked, bool dislik
     m_tracks[row].disliked = disliked;
     const QModelIndex changed = index(row);
     emit dataChanged(changed, changed, {LikedRole, DislikedRole, TrackRole});
+}
+
+void TrackListModel::setLyricsKind(const QString &trackId, const QString &kind)
+{
+    const int row = indexOfId(trackId);
+    if (row < 0 || m_tracks[row].lyricsKind == kind)
+        return;
+    m_tracks[row].lyricsKind = kind;
+    const QModelIndex changed = index(row);
+    emit dataChanged(changed, changed, {LyricsKindRole, TrackRole});
 }
 
 void TrackListModel::removeId(const QString &trackId)

@@ -172,6 +172,8 @@ void LyricsController::save(const QString &trackId, const QString &text)
                    remember(trackId, response.object);
                    if (m_active && trackId == m_player->currentTrackId())
                        apply(trackId, response.object);
+                   emit kindChanged(trackId, response.object.value(QStringLiteral("kind"))
+                                                 .toString(QStringLiteral("none")));
                    emit notify(tr("Текст сохранён"));
                    emit saved(trackId);
                });
@@ -193,6 +195,7 @@ void LyricsController::remove(const QString &trackId)
                    m_cache.remove(trackId);
                    if (m_active && trackId == m_player->currentTrackId())
                        load(trackId);
+                   emit kindChanged(trackId, QStringLiteral("none"));
                    emit notify(tr("Текст удалён"));
                    emit saved(trackId);
                });

@@ -1,6 +1,8 @@
 #include "ApiClient.h"
+#include "AppIdentity.h"
 #include "AuthController.h"
 #include "DiscordPresence.h"
+#include "DiscordRelay.h"
 #include "LibraryController.h"
 #include "LyricsController.h"
 #include "MediaSession.h"
@@ -69,11 +71,18 @@ int main(int argc, char *argv[])
 {
     installFileLogging();
 
+    // The same executable doubles as the helper that holds the Discord connection.
+    if (DiscordRelay::requested(argc, argv))
+        return DiscordRelay::run(argc, argv);
+
     QGuiApplication app(argc, argv);
 
     QGuiApplication::setApplicationName(QStringLiteral("Wavelane"));
     QGuiApplication::setOrganizationName(QStringLiteral("Wavelane"));
     QGuiApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+
+    // Windows labels the media panel and the taskbar by this name.
+    AppIdentity::registerForShell();
 
     // The same mark as the logo in the app, at every size the shell may ask for.
     QIcon icon;
@@ -119,6 +128,14 @@ int main(int argc, char *argv[])
                      &WaveController::applyReaction);
     QObject::connect(&library, &LibraryController::reactionChanged, &player,
                      &Player::applyReaction);
+
+    // A text added or removed by an administrator changes the mark in every list.
+    QObject::connect(&lyrics, &LyricsController::kindChanged, &library,
+                     &LibraryController::applyLyricsKind);
+    QObject::connect(&lyrics, &LyricsController::kindChanged, &wave,
+                     &WaveController::applyLyricsKind);
+    QObject::connect(&lyrics, &LyricsController::kindChanged, &player,
+                     &Player::applyLyricsKind);
 
     // Deleted tracks must vanish from the queue, the history and the player.
     QObject::connect(&library, &LibraryController::tracksDeleted, &wave,

@@ -39,6 +39,13 @@ ApplicationWindow {
             collectionPage.refresh()
     }
 
+    //! Sparks from the like or dislike button to the wave's blobs (or up, off the wave page).
+    function react(kind) {
+        const button = kind === "like" ? transport.likeButton : transport.dislikeButton
+        const onWave = window.page === "wave" && !window.lyricsOpen
+        reactionFx.play(kind, button, onWave ? wavePage : null)
+    }
+
     function togglePlayback() {
         if (player.hasTrack)
             player.togglePlayPause()
@@ -52,6 +59,12 @@ ApplicationWindow {
         target: library
         function onNotify(message) { toast.show(message) }
         function onConflictsFound() { conflictDialog.open() }
+        function onReactionChanged(trackId, liked, disliked) {
+            if (liked)
+                window.react("like")
+            else if (disliked)
+                window.react("dislike")
+        }
     }
     Connections {
         target: lyrics
@@ -212,7 +225,7 @@ ApplicationWindow {
                                 id: searchPage
                                 detailOpen: window.detailOpen
                             }
-                            WavePage {}
+                            WavePage { id: wavePage }
                             CollectionPage {
                                 id: collectionPage
                                 detailOpen: window.detailOpen
@@ -236,6 +249,7 @@ ApplicationWindow {
                 Layout.preferredHeight: Theme.transportHeight
                 lyricsOpen: window.lyricsOpen
                 onToggleLyrics: window.lyricsOpen = !window.lyricsOpen
+                onWaveDisliked: window.react("dislike")
             }
         }
     }
@@ -247,6 +261,15 @@ ApplicationWindow {
         border.color: Theme.borderStrong
         border.width: 1
         visible: !window.maximized
+    }
+
+    ReactionFx {
+        id: reactionFx
+        anchors.fill: parent
+        z: 10
+        onArrived: function(kind) {
+            wavePage.pulse(kind === "like" ? "#ff1f4d" : "#7d828f", kind === "like" ? 1.0 : 0.8)
+        }
     }
 
     ResizeHandles { window: window }

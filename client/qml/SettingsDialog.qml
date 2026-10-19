@@ -128,31 +128,11 @@ Popup {
                 }
             }
 
-            FlatField {
-                Layout.fillWidth: true
-                label: qsTr("Application ID")
-                text: app.discordClientId
-                placeholder: "123456789012345678"
-                onCommitted: function(value) { app.discordClientId = value }
-            }
-
-            FlatField {
-                Layout.fillWidth: true
-                label: qsTr("Публичный адрес сервера для обложек (необязательно)")
-                text: app.discordCoverBase
-                placeholder: "https://music.example.com"
-                onCommitted: function(value) { app.discordCoverBase = value }
-            }
-
             Text {
                 Layout.fillWidth: true
-                text: qsTr("Как подключить: на discord.com/developers/applications создайте приложение с "
-                           + "названием «Wavelane» (именно оно покажется в «Слушает Wavelane») и скопируйте "
-                           + "его Application ID сюда. Чтобы на профиле было лого, в разделе Rich Presence → "
-                           + "Art Assets загрузите client/resources/wavelane-discord.png под именем wavelane.\n\n"
-                           + "Обложки треков Discord подтягивает со своих серверов, поэтому они появятся, "
-                           + "только если сервер доступен из интернета и адрес указан выше. С сервером на "
-                           + "этом же компьютере показывается лого.")
+                text: qsTr("В профиле Discord показывается «Слушает Wavelane»: название и исполнитель "
+                           + "трека, обложка и полоса прогресса. Когда Wavelane закрывается, "
+                           + "статус убирается.")
                 color: Theme.faint
                 font.family: Theme.sans
                 font.pixelSize: Theme.fontSmall

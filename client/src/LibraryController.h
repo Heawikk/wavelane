@@ -93,6 +93,9 @@ public:
 
     void clear();
 
+    //! Mirror a change of a track's lyrics into every list that shows it.
+    void applyLyricsKind(const QString &trackId, const QString &kind);
+
 signals:
     void searchingChanged();
     void uploadingChanged();

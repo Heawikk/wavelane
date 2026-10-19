@@ -26,6 +26,7 @@ endif()
 
 qt_add_executable(wavelane
     src/main.cpp
+    src/AppIdentity.h        src/AppIdentity.cpp
     src/Settings.h           src/Settings.cpp
     src/ApiClient.h          src/ApiClient.cpp
     src/AuthController.h     src/AuthController.cpp
@@ -34,7 +35,9 @@ qt_add_executable(wavelane
     src/AudioTap.h           src/AudioTap.cpp
     src/LyricsController.h   src/LyricsController.cpp
     src/MediaSession.h       src/MediaSession.cpp
+    src/DiscordIpc.h         src/DiscordIpc.cpp
     src/DiscordPresence.h    src/DiscordPresence.cpp
+    src/DiscordRelay.h       src/DiscordRelay.cpp
     src/Player.h             src/Player.cpp
     src/WaveController.h     src/WaveController.cpp
     src/LibraryController.h  src/LibraryController.cpp
@@ -83,6 +86,8 @@ qt_add_qml_module(wavelane
         qml/Logo.qml
         qml/LyricsView.qml
         qml/LyricsEditor.qml
+        qml/LyricsBadge.qml
+        qml/ReactionFx.qml
         qml/FlatField.qml
         qml/SettingsDialog.qml
 )
@@ -128,7 +133,7 @@ target_link_libraries(wavelane PRIVATE
 
 # The Windows media controls are a WinRT API.
 if(WIN32)
-    target_link_libraries(wavelane PRIVATE windowsapp)
+    target_link_libraries(wavelane PRIVATE windowsapp shell32 ole32 propsys)
 endif()
 
 set_target_properties(wavelane PROPERTIES

@@ -12,10 +12,12 @@ layout(std140, binding = 0) uniform buf {
     float mid;       // 0..1
     float treble;    // 0..1
     float aspect;    // width / height of the item
+    float flash;     // 0..1, a pulse of flashColor passing through the blobs
     vec4 colorA;
     vec4 colorB;
     vec4 colorC;
     vec4 background;
+    vec4 flashColor;
 } ubuf;
 
 // A soft "metaball": near 1 close to the centre, falling off smoothly. Summing
@@ -39,7 +41,7 @@ void main()
     w += (0.020 + 0.045 * ubuf.mid) * vec2(sin(p.y * 8.5 - t * 0.9), cos(p.x * 8.5 + t * 0.8));
 
     // The beat swells the blobs; the rest of the music brightens them.
-    float swell = 1.0 + 0.55 * ubuf.bass;
+    float swell = 1.0 + 0.55 * ubuf.bass + 0.30 * ubuf.flash;
 
     vec2 c1 = vec2(0.30 * sin(t * 0.31 + 0.3), 0.20 * cos(t * 0.43)) * vec2(ubuf.aspect * 0.8, 1.0);
     vec2 c2 = vec2(-0.32 * cos(t * 0.27 + 1.1), 0.22 * sin(t * 0.37 + 0.6)) * vec2(ubuf.aspect * 0.8, 1.0);
@@ -62,12 +64,14 @@ void main()
                + mix(ubuf.colorA.rgb, ubuf.colorC.rgb, 0.5) * f4
                + mix(ubuf.colorB.rgb, ubuf.colorA.rgb, 0.5) * f5;
     vec3 tint = mixed / max(field, 0.001);
+    // A reaction (a like, a dislike) washes the blobs with its colour and fades.
+    tint = mix(tint, ubuf.flashColor.rgb, 0.9 * ubuf.flash);
 
     // A solid body where the field is strong, and a wide halo around it.
     float body = smoothstep(0.85, 2.4, field);
     float halo = 1.0 - exp(-field * 0.55);
 
-    float energy = 0.50 + 0.36 * ubuf.level + 0.16 * ubuf.mid;
+    float energy = (0.50 + 0.36 * ubuf.level + 0.16 * ubuf.mid) * (1.0 + 0.12 * ubuf.flash);
     vec3 colour = tint * (body * 0.80 + halo * 0.30) * energy;
 
     // Finer ripples riding on the surface when there is treble.

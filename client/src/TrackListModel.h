@@ -38,6 +38,7 @@ public:
         ScoreRole,
         ReasonRole,
         FeaturesRole,
+        LyricsKindRole,
         TrackRole,          //!< The whole track as a QVariantMap.
     };
     Q_ENUM(Roles)
@@ -63,6 +64,8 @@ public:
 
     //! Update the like/dislike flags of one row in place.
     void setReaction(const QString &trackId, bool liked, bool disliked);
+    //! Update which kind of lyrics one row has, after an administrator edited them.
+    void setLyricsKind(const QString &trackId, const QString &kind);
     void removeId(const QString &trackId);
 
     Q_INVOKABLE QVariantMap get(int row) const;

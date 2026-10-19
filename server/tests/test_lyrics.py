@@ -200,3 +200,28 @@ async def test_removing_lyrics_leaves_none(client, api, account, upload_track):
     assert deleted.status_code == 204
     after = (await client.get(f"{api}/tracks/{track['id']}/lyrics", headers=account.headers)).json()
     assert after["kind"] == "none"
+
+
+async def test_tracks_carry_the_kind_of_their_lyrics(client, api, account, upload_track):
+    track = (await upload_track(account, "marked.wav"))["track"]
+    assert track["lyrics_kind"] == "none"
+
+    async def kind_in_detail() -> str:
+        return (await client.get(f"{api}/tracks/{track['id']}", headers=account.headers)).json()[
+            "lyrics_kind"
+        ]
+
+    await client.put(
+        f"{api}/tracks/{track['id']}/lyrics", headers=account.headers, json={"text": "la la"}
+    )
+    assert await kind_in_detail() == "plain"
+
+    await client.put(
+        f"{api}/tracks/{track['id']}/lyrics",
+        headers=account.headers,
+        json={"text": "[00:01.00]la\n[00:02.00]la"},
+    )
+    assert await kind_in_detail() == "synced"
+
+    await client.delete(f"{api}/tracks/{track['id']}/lyrics", headers=account.headers)
+    assert await kind_in_detail() == "none"

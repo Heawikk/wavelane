@@ -16,6 +16,7 @@ Track Track::fromJson(const QJsonObject &object)
     track.bitrateKbps = object.value(QStringLiteral("bitrate_kbps")).toInt();
     track.playCount = static_cast<qint64>(object.value(QStringLiteral("play_count")).toDouble());
     track.coverPath = object.value(QStringLiteral("cover_path")).toString();
+    track.lyricsKind = object.value(QStringLiteral("lyrics_kind")).toString(QStringLiteral("none"));
 
     // liked/disliked are null for anonymous requests, which toBool() maps to false.
     track.liked = object.value(QStringLiteral("liked")).toBool();
@@ -63,6 +64,7 @@ QVariantMap Track::toVariantMap() const
         {QStringLiteral("liked"), liked},
         {QStringLiteral("disliked"), disliked},
         {QStringLiteral("genres"), genres},
+        {QStringLiteral("lyricsKind"), lyricsKind},
         {QStringLiteral("streamUrl"), streamUrl},
         {QStringLiteral("score"), score},
         {QStringLiteral("reason"), reasonSummary},

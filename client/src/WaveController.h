@@ -62,6 +62,9 @@ public:
     //! Mirror a like/dislike made elsewhere into the queue and history.
     void applyReaction(const QString &trackId, bool liked, bool disliked);
 
+    //! Mirror a change of a track's lyrics into the queue and history.
+    void applyLyricsKind(const QString &trackId, const QString &kind);
+
     //! Drop deleted tracks from the queue and history.
     void removeTracks(const QStringList &trackIds);
 

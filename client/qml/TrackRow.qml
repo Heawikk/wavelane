@@ -24,6 +24,8 @@ Rectangle {
     property var genres: []
     property bool liked: false
     property bool isExplicit: false
+    //! "none", "plain" or "synced".
+    property string lyricsKind: "none"
 
     property bool selected: false
     property bool playingNow: false
@@ -103,16 +105,21 @@ Rectangle {
             spacing: 8
 
             Text {
-                // With a reason beside it the title keeps its natural width and the
-                // reason takes the rest; otherwise the title takes the lot. Sizing it
+                // The title keeps its natural width, so the marks sit right after it;
+                // it only shrinks (and elides) when the column is too narrow. What is
+                // left over goes to the reason, or to the spacer below. Sizing it
                 // from parent.width instead makes the layout recurse.
-                Layout.fillWidth: !(root.showReason && root.reason !== "")
+                Layout.fillWidth: false
                 text: root.title
                 color: root.playingNow ? Theme.accentText : Theme.text
                 font.family: Theme.sans
                 font.pixelSize: Theme.fontBody
                 font.weight: root.playingNow ? Font.DemiBold : Font.Normal
                 elide: Text.ElideRight
+            }
+
+            LyricsBadge {
+                kind: root.lyricsKind
             }
 
             Rectangle {
@@ -129,6 +136,11 @@ Rectangle {
                     font.pixelSize: 9
                     font.weight: Font.Bold
                 }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                visible: !(root.showReason && root.reason !== "")
             }
 
             Mono {
