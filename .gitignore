@@ -33,3 +33,7 @@ desktop.ini
 tools/
 demo_music/
 aqtinstall.log
+
+# Built packages for people to download, and the server certificate
+dist/
+*.crt

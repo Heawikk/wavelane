@@ -73,7 +73,9 @@ Item {
     property var shownBands: idleBands
 
     FrameAnimation {
-        running: root.visible && (root.blobsOn || root.vizStyle !== "off")
+        // not while the app is off screen (minimized, or the phone's screen is dark)
+        running: root.visible && Qt.application.state >= Qt.ApplicationInactive
+                 && (root.blobsOn || root.vizStyle !== "off")
         onTriggered: {
             root.clock += frameTime * (0.55 + 1.1 * root.level)
             if (root.audible) {
@@ -152,7 +154,8 @@ Item {
                 text: qsTr("Моя волна")
                 color: Theme.text
                 font.family: Theme.sans
-                font.pixelSize: 88
+                // 88 px on a desktop; narrower windows (a phone) get a smaller heading
+                font.pixelSize: Math.max(40, Math.min(88, Math.floor(root.width / 6.4)))
                 font.weight: Font.Black
                 font.letterSpacing: -2
             }
@@ -248,6 +251,8 @@ Item {
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: 18
             visible: root.vizStyle === "bars" || root.vizStyle === "wave" || root.vizStyle === "dots"
+            // shrink to fit a narrow window instead of running off its edges
+            scale: Math.min(1, (root.width - 32) / implicitWidth)
             style: root.vizStyle
             tint: Qt.lighter(root.colors[2], 1.25)
             bands: root.shownBands

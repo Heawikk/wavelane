@@ -17,7 +17,7 @@ Popup {
     dim: true
     focus: true
     padding: 0
-    width: 560
+    width: Math.min(560, (parent ? parent.width : 560) - 24)
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
     Overlay.modal: Rectangle { color: Theme.alpha("#000000", 0.6) }
@@ -133,6 +133,7 @@ Popup {
             }
 
             Rectangle {
+                visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
                 Layout.topMargin: 12
@@ -141,6 +142,7 @@ Popup {
 
             // --- Windows ---
             ColumnLayout {
+                visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
                 Layout.margins: 18
                 Layout.bottomMargin: 6
@@ -179,6 +181,7 @@ Popup {
             }
 
             Rectangle {
+                visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
                 Layout.preferredHeight: 1
                 Layout.topMargin: 12
@@ -187,6 +190,7 @@ Popup {
 
             // --- Discord ---
             ColumnLayout {
+                visible: Qt.platform.os === "windows"
                 Layout.fillWidth: true
                 Layout.margins: 18
                 spacing: 12

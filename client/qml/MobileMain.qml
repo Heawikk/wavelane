@@ -1,0 +1,213 @@
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Wavelane
+
+/*!
+    The application on a phone.
+
+    The same look as the desktop (flat, dark, small monospace capitals), but
+    laid out for a thumb: a strip with the page title above, the page in the
+    middle, what is playing and the three tabs underneath. Tapping what is
+    playing opens the full player over everything.
+*/
+ApplicationWindow {
+    id: window
+
+    // These only matter when the phone layout is shown on a desktop for testing.
+    width: 412
+    height: 880
+    visible: true
+    title: qsTr("Wavelane")
+    color: Theme.bg
+
+    property string page: "wave"
+    property bool nowPlayingOpen: false
+    property bool lyricsOpen: false
+
+    onLyricsOpenChanged: lyrics.active = lyricsOpen && auth.signedIn
+
+    readonly property string pageNumber: page === "search" ? "01" : page === "wave" ? "02" : "03"
+    readonly property string pageTitle: page === "search" ? qsTr("Поиск")
+                                        : page === "wave" ? qsTr("Моя волна")
+                                        : qsTr("Коллекция")
+
+    function showPage(name) {
+        window.page = name
+        if (name === "collection")
+            collectionPage.refresh()
+    }
+
+    Connections {
+        target: wave
+        function onNotify(message) { toast.show(message) }
+    }
+    Connections {
+        target: library
+        function onNotify(message) { toast.show(message) }
+    }
+    Connections {
+        target: lyrics
+        function onNotify(message) { toast.show(message) }
+    }
+    Connections {
+        target: player
+        function onPlaybackFailed(message) { toast.show(message) }
+    }
+    Connections {
+        target: auth
+        function onSignedInChanged() {
+            if (auth.signedIn) {
+                // the keyboard from the sign-in form should not stay up
+                Qt.inputMethod.hide()
+                window.page = "wave"
+                wave.loadSettings()
+                library.loadStats()
+                library.loadCatalogue()
+                library.loadLiked()
+                wave.refreshProfile()
+            } else {
+                window.nowPlayingOpen = false
+                window.lyricsOpen = false
+            }
+        }
+    }
+
+    // The Back button first closes what is on top, and only then leaves the app.
+    onClosing: function(close) {
+        if (lyricsOpen) {
+            lyricsOpen = false
+            close.accepted = false
+        } else if (nowPlayingOpen) {
+            nowPlayingOpen = false
+            close.accepted = false
+        } else if (page !== "wave" && auth.signedIn) {
+            page = "wave"
+            close.accepted = false
+        } else if (player.hasTrack) {
+            // Back from the main page leaves the app running, like any music player.
+            media.moveToBackground()
+            close.accepted = false
+        }
+    }
+
+    // --- signed out ---
+    LoginPage {
+        anchors.fill: parent
+        visible: !auth.signedIn
+    }
+
+    // --- signed in ---
+    ColumnLayout {
+        anchors.fill: parent
+        visible: auth.signedIn
+        spacing: 0
+
+        // the strip with the page heading and its buttons
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 52
+            color: window.page === "wave" ? "transparent" : Theme.bg
+            z: 2
+
+            Rectangle {
+                anchors.bottom: parent.bottom
+                width: parent.width
+                height: 1
+                color: Theme.border
+                visible: window.page !== "wave"
+            }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 14
+                anchors.rightMargin: 4
+                spacing: 10
+
+                Rectangle {
+                    Layout.preferredWidth: 22
+                    Layout.preferredHeight: 18
+                    color: Theme.accent
+
+                    Mono {
+                        anchors.centerIn: parent
+                        text: window.pageNumber
+                        color: "white"
+                        font.pixelSize: 11
+                        font.weight: Font.Bold
+                    }
+                }
+                Mono {
+                    Layout.fillWidth: true
+                    text: window.pageTitle
+                    color: Theme.text
+                    font.weight: Font.DemiBold
+                    font.pixelSize: 13
+                }
+                IconButton {
+                    visible: window.page === "wave"
+                    size: 48
+                    glyph: Theme.iTune
+                    glyphSize: 20
+                    onClicked: tuneSheet.open()
+                }
+                IconButton {
+                    size: 48
+                    glyph: Theme.iSettings
+                    glyphSize: 20
+                    onClicked: settingsDialog.open()
+                }
+            }
+        }
+
+        StackLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            // the wave's glow runs behind the strip above it
+            Layout.topMargin: window.page === "wave" ? -52 : 0
+            currentIndex: window.page === "search" ? 0 : window.page === "wave" ? 1 : 2
+
+            MobileSearchPage { id: searchPage }
+            WavePage { id: wavePage }
+            MobileCollectionPage { id: collectionPage }
+        }
+
+        MiniPlayer {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 60
+            visible: player.hasTrack
+            onOpened: window.nowPlayingOpen = true
+        }
+
+        BottomNav {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 56
+            page: window.page
+            onSelected: function(name) { window.showPage(name) }
+        }
+    }
+
+    // --- the full player, over everything ---
+    NowPlaying {
+        id: nowPlaying
+        width: parent.width
+        height: parent.height
+        y: window.nowPlayingOpen && auth.signedIn ? 0 : height
+        visible: y < height
+        lyricsOpen: window.lyricsOpen
+        onClosed: {
+            window.lyricsOpen = false
+            window.nowPlayingOpen = false
+        }
+        onLyricsToggled: window.lyricsOpen = !window.lyricsOpen
+
+        Behavior on y {
+            NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+        }
+    }
+
+    MobileTuneSheet { id: tuneSheet }
+    SettingsDialog { id: settingsDialog }
+
+    Toast { id: toast }
+}

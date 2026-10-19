@@ -47,7 +47,9 @@ QtObject {
     }
     readonly property string monoFamily: firstInstalled(
         ["Cascadia Mono", "Cascadia Code", "Consolas", "Lucida Console", "Courier New"], "monospace")
-    readonly property string iconFamily: firstInstalled(
+    // Phones have no Segoe icons, so they use the bundled Material Icons instead.
+    readonly property bool mobileIcons: Qt.platform.os === "android" || Qt.platform.os === "ios"
+    readonly property string iconFamily: mobileIcons ? "Material Icons" : firstInstalled(
         ["Segoe Fluent Icons", "Segoe MDL2 Assets"], "Segoe UI Symbol")
     readonly property string sans: "Segoe UI"
 
@@ -65,35 +67,36 @@ QtObject {
     readonly property int fontTitle: 20
 
     // --- icon glyphs (Segoe Fluent Icons / Segoe MDL2 Assets) ---------------
-    readonly property string iPlay: ""
-    readonly property string iPause: ""
-    readonly property string iPrev: ""
-    readonly property string iDelete: ""
-    readonly property string iFolder: ""
-    readonly property string iSettings: ""
-    readonly property string iEdit: ""
-    readonly property string iNext: ""
-    readonly property string iHeart: ""
-    readonly property string iHeartFill: ""
-    readonly property string iDislike: ""
-    readonly property string iVolume: ""
-    readonly property string iMute: ""
-    readonly property string iSearch: ""
-    readonly property string iRefresh: ""
-    readonly property string iAdd: ""
-    readonly property string iClose: ""
-    readonly property string iChevronDown: ""
-    readonly property string iChevronUp: ""
-    readonly property string iPanel: ""
-    readonly property string iLogout: ""
-    readonly property string iWave: ""
-    readonly property string iLibrary: ""
-    readonly property string iCatalogue: ""
-    readonly property string iBlock: ""
-    readonly property string iMinimize: ""
-    readonly property string iMaximize: ""
-    readonly property string iRestore: ""
-    readonly property string iWinClose: ""
+    readonly property string iPlay: mobileIcons ? "\ue037" : ""
+    readonly property string iPause: mobileIcons ? "\ue034" : ""
+    readonly property string iPrev: mobileIcons ? "\ue045" : ""
+    readonly property string iDelete: mobileIcons ? "\ue872" : ""
+    readonly property string iFolder: mobileIcons ? "\ue2c8" : ""
+    readonly property string iSettings: mobileIcons ? "\ue8b8" : ""
+    readonly property string iEdit: mobileIcons ? "\ue3c9" : ""
+    readonly property string iNext: mobileIcons ? "\ue044" : ""
+    readonly property string iHeart: mobileIcons ? "\ue87e" : ""
+    readonly property string iHeartFill: mobileIcons ? "\ue87d" : ""
+    readonly property string iDislike: mobileIcons ? "\ue9f2" : ""
+    readonly property string iVolume: mobileIcons ? "\ue050" : ""
+    readonly property string iMute: mobileIcons ? "\ue04f" : ""
+    readonly property string iSearch: mobileIcons ? "\ue8b6" : ""
+    readonly property string iRefresh: mobileIcons ? "\ue5d5" : ""
+    readonly property string iAdd: mobileIcons ? "\ue145" : ""
+    readonly property string iClose: mobileIcons ? "\ue5cd" : ""
+    readonly property string iChevronDown: mobileIcons ? "\ue5cf" : ""
+    readonly property string iChevronUp: mobileIcons ? "\ue5ce" : ""
+    readonly property string iPanel: mobileIcons ? "\uf114" : ""
+    readonly property string iLogout: mobileIcons ? "\ue9ba" : ""
+    readonly property string iWave: mobileIcons ? "\ue1b8" : ""
+    readonly property string iLibrary: mobileIcons ? "\ue030" : ""
+    readonly property string iCatalogue: mobileIcons ? "\ue574" : ""
+    readonly property string iTune: mobileIcons ? "\ue429" : "\ue71c"
+    readonly property string iBlock: mobileIcons ? "\ue14b" : ""
+    readonly property string iMinimize: mobileIcons ? "\ue931" : ""
+    readonly property string iMaximize: mobileIcons ? "\ue3c6" : ""
+    readonly property string iRestore: mobileIcons ? "\ue3e0" : ""
+    readonly property string iWinClose: mobileIcons ? "\ue5cd" : ""
 
     function alpha(baseColor, amount) {
         return Qt.rgba(baseColor.r, baseColor.g, baseColor.b, amount)

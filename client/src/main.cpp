@@ -13,6 +13,11 @@
 #include <QCommandLineParser>
 #include <QDateTime>
 #include <QFile>
+#include <QFontDatabase>
+#ifdef Q_OS_ANDROID
+#include <QThread>
+#include <private/qunixeventdispatcher_qpa_p.h>
+#endif
 #include <QGuiApplication>
 #include <QIcon>
 #include <QLoggingCategory>
@@ -71,6 +76,20 @@ int main(int argc, char *argv[])
 {
     installFileLogging();
 
+#ifdef Q_OS_ANDROID
+    // The threaded render loop makes the GUI thread wait for the next frame, and a window that has
+    // left the screen gets none, so everything on the GUI thread (the player included) froze as soon
+    // as the screen went dark. Drawing on the GUI thread itself keeps it free to run in the background.
+    if (!qEnvironmentVariableIsSet("QSG_RENDER_LOOP"))
+        qputenv("QSG_RENDER_LOOP", "basic");
+
+    // Qt's Android event loop stops dead (timers, network, the player moving on to the next track)
+    // the moment the window leaves the screen, to save battery. A music player has to go on, so the
+    // main thread gets the plain Unix loop instead, which has no such stop. Qt hides the windows and
+    // stops drawing on its own; only the loop itself keeps running.
+    QThread::currentThread()->setEventDispatcher(new QUnixEventDispatcherQPA);
+#endif
+
     // The same executable doubles as the helper that holds the Discord connection.
     if (DiscordRelay::requested(argc, argv))
         return DiscordRelay::run(argc, argv);
@@ -80,6 +99,12 @@ int main(int argc, char *argv[])
     QGuiApplication::setApplicationName(QStringLiteral("Wavelane"));
     QGuiApplication::setOrganizationName(QStringLiteral("Wavelane"));
     QGuiApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+
+    // The design uses a monospace for its labels and, where the system has no Segoe
+    // icons, an icon font; carrying both makes it look the same on every platform.
+    for (const char *font : {":/fonts/CascadiaMono-Regular.ttf", ":/fonts/CascadiaMono-SemiBold.ttf",
+                             ":/fonts/MaterialIcons-Regular.ttf"})
+        QFontDatabase::addApplicationFont(QString::fromLatin1(font));
 
     // Windows labels the media panel and the taskbar by this name.
     AppIdentity::registerForShell();
@@ -168,7 +193,13 @@ int main(int argc, char *argv[])
                      []() { QCoreApplication::exit(-1); },
                      Qt::QueuedConnection);
 
-    engine.loadFromModule("Wavelane", "Main");
+    // A phone gets its own layout. WAVELANE_MOBILE=1 shows it on a desktop, for testing.
+#ifdef Q_OS_ANDROID
+    const bool mobile = true;
+#else
+    const bool mobile = qEnvironmentVariableIntValue("WAVELANE_MOBILE") != 0;
+#endif
+    engine.loadFromModule("Wavelane", mobile ? "MobileMain" : "Main");
     if (engine.rootObjects().isEmpty()) {
         qCCritical(lcApp) << "the QML scene failed to load";
         return -1;

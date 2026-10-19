@@ -69,6 +69,8 @@ private:
         std::array<float, BandCount> bands{};
     };
 
+    //! The analysis is only for the picture: when nothing can be seen it is switched off.
+    void setActive(bool active);
     void onBuffer(const QAudioBuffer &buffer);
     void analyseWindow(qint64 startUs);
     void prepareBands(int sampleRate);
@@ -78,6 +80,8 @@ private:
     QMediaPlayer *m_player = nullptr;
     QAudioBufferOutput m_output;
     QTimer m_timer;
+    bool m_attached = false;
+    bool m_active = true;
 
     // --- decoded audio waiting to be analysed ---
     std::vector<float> m_samples;

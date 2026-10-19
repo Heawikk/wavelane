@@ -41,6 +41,9 @@ public:
     void attach(QWindow *window);
     bool active() const { return m_active; }
 
+    //! On a phone: send the app to the background, keeping the music going. Elsewhere: nothing.
+    Q_INVOKABLE void moveToBackground();
+
 signals:
     void activeChanged();
 
@@ -56,6 +59,10 @@ private:
     void syncState();
     void syncTimeline();
     void pushMetadata(bool withCover);
+#ifdef Q_OS_ANDROID
+    //! Hand the whole current state to the Android playback service.
+    void pushAndroid();
+#endif
 
     struct Impl;
     std::unique_ptr<Impl> m_impl;

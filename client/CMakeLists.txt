@@ -85,6 +85,15 @@ qt_add_qml_module(wavelane
         qml/Equalizer.qml
         qml/Visualizer.qml
         qml/RingVisualizer.qml
+        qml/Chip.qml
+        qml/MobileTrackList.qml
+        qml/MiniPlayer.qml
+        qml/BottomNav.qml
+        qml/NowPlaying.qml
+        qml/MobileTuneSheet.qml
+        qml/MobileSearchPage.qml
+        qml/MobileCollectionPage.qml
+        qml/MobileMain.qml
         qml/Logo.qml
         qml/LyricsView.qml
         qml/LyricsEditor.qml
@@ -116,6 +125,18 @@ qt_add_resources(wavelane "app_icons"
         resources/wavelane-256.png
 )
 
+# The fonts the design depends on, so every platform draws it the same way: the
+# monospace of the labels (Cascadia Mono, OFL) and the icon font used where the
+# system has no Segoe icons, i.e. on Android (Material Icons, Apache 2.0).
+qt_add_resources(wavelane "app_fonts"
+    PREFIX "/fonts"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/resources/fonts"
+    FILES
+        resources/fonts/CascadiaMono-Regular.ttf
+        resources/fonts/CascadiaMono-SemiBold.ttf
+        resources/fonts/MaterialIcons-Regular.ttf
+)
+
 # ...and the icon of the .exe itself, which Explorer and the taskbar read.
 if(WIN32)
     configure_file(resources/wavelane.rc.in "${CMAKE_CURRENT_BINARY_DIR}/wavelane.rc" @ONLY)
@@ -138,6 +159,18 @@ if(WIN32)
     target_link_libraries(wavelane PRIVATE windowsapp shell32 ole32 propsys)
 endif()
 
+if(ANDROID)
+    # The event loop of the main thread is replaced (see main.cpp), which needs a private header.
+    target_link_libraries(wavelane PRIVATE Qt6::GuiPrivate)
+    # The manifest (permissions, cleartext http, portrait) and the launcher icons.
+    set_property(TARGET wavelane PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
+        "${CMAKE_CURRENT_SOURCE_DIR}/android")
+    set_property(TARGET wavelane PROPERTY QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}")
+    set_property(TARGET wavelane PROPERTY QT_ANDROID_VERSION_CODE 1)
+    set_property(TARGET wavelane PROPERTY QT_ANDROID_MIN_SDK_VERSION 28)
+    set_property(TARGET wavelane PROPERTY QT_ANDROID_TARGET_SDK_VERSION 34)
+endif()
+
 set_target_properties(wavelane PROPERTIES
     # A GUI app should not open a console window on Windows.
     WIN32_EXECUTABLE TRUE
@@ -153,4 +186,5 @@ endif()
 install(TARGETS wavelane
     BUNDLE  DESTINATION .
     RUNTIME DESTINATION bin
+    LIBRARY DESTINATION lib
 )

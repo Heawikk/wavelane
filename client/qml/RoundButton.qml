@@ -58,7 +58,7 @@ Item {
 
     ToolTip {
         id: tip
-        visible: root.tooltip !== "" && mouse.containsMouse
+        visible: root.tooltip !== "" && mouse.containsMouse && !Theme.mobileIcons
         text: root.tooltip
         delay: 500
         padding: 6

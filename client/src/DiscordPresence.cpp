@@ -190,6 +190,11 @@ void DiscordPresence::setState(State state, const QString &detail)
 
 void DiscordPresence::refresh()
 {
+#ifdef Q_OS_ANDROID
+    // The Discord app on a phone has no pipe to talk to, and a helper process cannot be started.
+    setState(State::Disabled);
+    return;
+#endif
     if (!m_settings->discordEnabled()) {
         stopRelay();
         setState(State::Disabled);

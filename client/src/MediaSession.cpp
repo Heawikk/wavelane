@@ -19,6 +19,12 @@
 
 #include <QLoggingCategory>
 #include <QPointer>
+#ifdef Q_OS_ANDROID
+#include <QJniEnvironment>
+#include <QJniObject>
+#include <QCoreApplication>
+#include <QGuiApplication>
+#endif
 #include <QTimer>
 #include <QWindow>
 
@@ -64,6 +70,41 @@ wf::TimeSpan fromMilliseconds(qint64 milliseconds)
 struct MediaSession::Impl
 {
 };
+#endif
+
+#ifdef Q_OS_ANDROID
+namespace {
+
+//! The one session, for the callbacks that arrive from Java on another thread.
+QPointer<MediaSession> g_androidSession;
+
+constexpr auto kServiceClass = "ru/nrzx/wavelane/PlaybackService";
+
+//! The notification buttons and the lock screen, passed on to the app.
+void nativeAction(JNIEnv *, jclass, jint action, jlong argument)
+{
+    QPointer<MediaSession> session = g_androidSession;
+    qCInfo(lcMedia) << "media action from Android" << action;
+    if (!session)
+        return;
+    QMetaObject::invokeMethod(
+        session.data(),
+        [session, action, argument]() {
+            if (!session)
+                return;
+            switch (action) {
+            case 1: emit session->playRequested(); break;
+            case 2: emit session->pauseRequested(); break;
+            case 3: emit session->nextRequested(); break;
+            case 4: emit session->previousRequested(); break;
+            case 5: emit session->seekRequested(static_cast<qint64>(argument)); break;
+            default: break;
+            }
+        },
+        Qt::QueuedConnection);
+}
+
+} // namespace
 #endif
 
 MediaSession::MediaSession(Player *player, ApiClient *api, QObject *parent)
@@ -180,8 +221,39 @@ void MediaSession::attach(QWindow *window)
                            << QString::fromWCharArray(error.message().c_str());
         m_impl->controls = nullptr;
     }
+#elif defined(Q_OS_ANDROID)
+    Q_UNUSED(window)
+    if (m_active)
+        return;
+
+    QJniEnvironment env;
+    const JNINativeMethod methods[] = {{"nativeAction", "(IJ)V", reinterpret_cast<void *>(&nativeAction)}};
+    if (!env.registerNativeMethods(kServiceClass, methods, 1)) {
+        qCWarning(lcMedia) << "could not register the playback service";
+        return;
+    }
+    g_androidSession = this;
+
+    // Android 13 and later ask before a notification may be shown.
+    const QJniObject activity = QNativeInterface::QAndroidApplication::context();
+    QJniObject::callStaticMethod<void>(kServiceClass, "askForNotifications",
+                                       "(Landroid/app/Activity;)V", activity.object());
+
+    m_active = true;
+    emit activeChanged();
+    qCInfo(lcMedia) << "playback service ready";
+    syncTrack();
 #else
     Q_UNUSED(window)
+#endif
+}
+
+void MediaSession::moveToBackground()
+{
+#ifdef Q_OS_ANDROID
+    const QJniObject activity = QNativeInterface::QAndroidApplication::context();
+    QJniObject::callStaticMethod<void>(kServiceClass, "moveToBack", "(Landroid/app/Activity;)V",
+                                       activity.object());
 #endif
 }
 
@@ -286,10 +358,46 @@ void MediaSession::pushMetadata(bool withCover)
                                << QString::fromWCharArray(error.message().c_str());
         }
     }).detach();
+#elif defined(Q_OS_ANDROID)
+    Q_UNUSED(withCover)
+    pushAndroid();
 #else
     Q_UNUSED(withCover)
 #endif
 }
+
+#ifdef Q_OS_ANDROID
+void MediaSession::pushAndroid()
+{
+    if (!m_active)
+        return;
+
+    const QVariantMap track = m_player->currentTrack();
+    const bool hasTrack = m_player->hasTrack();
+    const QJniObject context = QNativeInterface::QAndroidApplication::context();
+
+    const QJniObject title = QJniObject::fromString(track.value(QStringLiteral("title")).toString());
+    const QJniObject artist = QJniObject::fromString(track.value(QStringLiteral("artistName")).toString());
+
+    QJniEnvironment env;
+    jbyteArray cover = nullptr;
+    if (!m_cover.isEmpty()) {
+        cover = env->NewByteArray(static_cast<jsize>(m_cover.size()));
+        env->SetByteArrayRegion(cover, 0, static_cast<jsize>(m_cover.size()),
+                                reinterpret_cast<const jbyte *>(m_cover.constData()));
+    }
+
+    QJniObject::callStaticMethod<void>(
+        kServiceClass, "update",
+        "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/String;[BZZJJ)V", context.object(),
+        title.object<jstring>(), artist.object<jstring>(), cover, static_cast<jboolean>(hasTrack),
+        static_cast<jboolean>(m_player->playing()), static_cast<jlong>(m_player->position()),
+        static_cast<jlong>(m_player->duration()));
+
+    if (cover)
+        env->DeleteLocalRef(cover);
+}
+#endif
 
 void MediaSession::syncState()
 {
@@ -318,6 +426,8 @@ void MediaSession::syncState()
         qCWarning(lcMedia) << "state update failed:"
                            << QString::fromWCharArray(error.message().c_str());
     }
+#elif defined(Q_OS_ANDROID)
+    pushAndroid();
 #endif
 }
 
@@ -341,5 +451,7 @@ void MediaSession::syncTimeline()
         qCWarning(lcMedia) << "timeline update failed:"
                            << QString::fromWCharArray(error.message().c_str());
     }
+#elif defined(Q_OS_ANDROID)
+    pushAndroid();
 #endif
 }

@@ -1,5 +1,6 @@
 #include "AudioTap.h"
 
+#include <QGuiApplication>
 #include <QLoggingCategory>
 #include <QMediaPlayer>
 
@@ -75,6 +76,7 @@ AudioTap::AudioTap(QMediaPlayer *player, bool attach, QObject *parent)
     m_positionClock.start();
     m_leadLog.start();
 
+    m_attached = attach;
     if (attach) {
         m_player->setAudioBufferOutput(&m_output);
         connect(&m_output, &QAudioBufferOutput::audioBufferReceived, this, &AudioTap::onBuffer);
@@ -87,6 +89,29 @@ AudioTap::AudioTap(QMediaPlayer *player, bool attach, QObject *parent)
     m_timer.setInterval(16);
     connect(&m_timer, &QTimer::timeout, this, &AudioTap::tick);
     m_timer.start();
+
+    // Nothing is drawn while the app is not on screen (the window is minimized, or the phone's
+    // screen is off), so listening to the audio for the picture would only waste battery.
+    connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+        setActive(state >= Qt::ApplicationInactive);
+    });
+}
+
+void AudioTap::setActive(bool active)
+{
+    if (m_active == active)
+        return;
+    m_active = active;
+    if (!m_attached)
+        return;
+    if (active) {
+        m_player->setAudioBufferOutput(&m_output);
+        m_timer.start();
+    } else {
+        m_player->setAudioBufferOutput(nullptr);
+        m_timer.stop();
+        reset();
+    }
 }
 
 void AudioTap::reset()

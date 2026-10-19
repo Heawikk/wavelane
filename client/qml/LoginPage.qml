@@ -65,7 +65,7 @@ Item {
 
     Rectangle {
         anchors.centerIn: parent
-        width: 380
+        width: Math.min(380, root.width - 32)
         height: form.implicitHeight + 2 * 24
         color: Theme.panel
         border.color: Theme.border
