@@ -54,18 +54,24 @@ ApplicationWindow {
         target: player
         function onPlaybackFailed(message) { toast.show(message) }
     }
+    function loadEverything() {
+        wave.loadSettings()
+        library.loadStats()
+        library.loadCatalogue()
+        library.loadLiked()
+        wave.refreshProfile()
+    }
+
     Connections {
         target: auth
+        // The app was opened with the server away; now it has answered.
+        function onSessionResumed() { window.loadEverything() }
         function onSignedInChanged() {
             if (auth.signedIn) {
                 // the keyboard from the sign-in form should not stay up
                 Qt.inputMethod.hide()
                 window.page = "wave"
-                wave.loadSettings()
-                library.loadStats()
-                library.loadCatalogue()
-                library.loadLiked()
-                wave.refreshProfile()
+                window.loadEverything()
             } else {
                 window.nowPlayingOpen = false
                 window.lyricsOpen = false
@@ -94,7 +100,29 @@ ApplicationWindow {
     // --- signed out ---
     LoginPage {
         anchors.fill: parent
-        visible: !auth.signedIn
+        visible: !auth.signedIn && !auth.restoring
+    }
+
+    // the stored session is being checked: a short, plain screen instead of the sign-in form flashing by
+    Rectangle {
+        anchors.fill: parent
+        visible: !auth.signedIn && auth.restoring
+        color: Theme.bg
+
+        Column {
+            anchors.centerIn: parent
+            spacing: 14
+
+            Logo {
+                size: 64
+                anchors.horizontalCenter: parent.horizontalCenter
+            }
+            Mono {
+                anchors.horizontalCenter: parent.horizontalCenter
+                text: qsTr("Подключение…")
+                color: Theme.faint
+            }
+        }
     }
 
     // --- signed in ---
@@ -176,6 +204,14 @@ ApplicationWindow {
                 MobileSearchPage { id: searchPage }
                 WavePage { id: wavePage }
                 MobileCollectionPage { id: collectionPage }
+            }
+
+            OfflineBadge {
+                width: parent.width
+                // under the strip with the buttons, which the wave page's glow runs behind
+                y: window.page === "wave" ? 52 : 0
+                z: 3
+                wanted: auth.signedIn
             }
 
             // A swipe sideways turns to the next page along the tabs. Only sideways travel counts,

@@ -13,6 +13,9 @@ Item {
     function show(message) {
         if (!message)
             return
+        // the strip under the title already says so
+        if (api.offline && message === "Нет соединения с сервером")
+            return
         label.text = message
         popup.opacity = 1.0
         hideTimer.restart()

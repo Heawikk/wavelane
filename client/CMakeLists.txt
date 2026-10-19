@@ -65,6 +65,7 @@ qt_add_qml_module(wavelane
         qml/Kbd.qml
         qml/CoverArt.qml
         qml/Toast.qml
+        qml/OfflineBadge.qml
         qml/WindowButton.qml
         qml/ResizeHandles.qml
         qml/TitleBar.qml

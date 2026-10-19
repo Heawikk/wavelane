@@ -74,21 +74,27 @@ ApplicationWindow {
         target: player
         function onPlaybackFailed(message) { toast.show(message) }
     }
+    function loadEverything() {
+        wave.loadSettings()
+        library.loadStats()
+        library.loadCatalogue()
+        library.loadLiked()
+        wave.refreshProfile()
+        if (auth.isAdmin) {
+            // an import may have been left running, and answers may be pending
+            library.restoreImport()
+            library.loadConflicts()
+        }
+    }
+
     Connections {
         target: auth
+        // The app was opened with the server away; now it has answered.
+        function onSessionResumed() { window.loadEverything() }
         function onSignedInChanged() {
             if (auth.signedIn) {
                 window.page = "wave"
-                wave.loadSettings()
-                library.loadStats()
-                library.loadCatalogue()
-                library.loadLiked()
-                wave.refreshProfile()
-                if (auth.isAdmin) {
-                    // an import may have been left running, and answers may be pending
-                    library.restoreImport()
-                    library.loadConflicts()
-                }
+                window.loadEverything()
             }
         }
     }
@@ -210,6 +216,12 @@ ApplicationWindow {
                         onOpenUpload: collectionPage.openUpload()
                         onOpenImport: collectionPage.openImport()
                         onShowConflicts: conflictDialog.open()
+                    }
+
+                    OfflineBadge {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: shown ? implicitHeight : 0
+                        wanted: auth.signedIn
                     }
 
                     Item {

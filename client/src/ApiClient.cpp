@@ -16,6 +16,10 @@ namespace {
 constexpr auto kApiPrefix = "/api/v1";
 constexpr int kTimeoutMs = 30000;
 constexpr int kUploadTimeoutMs = 5 * 60 * 1000;
+// Starting the app waits on these two, so a server that is out of reach must not keep it for 30 s.
+constexpr int kSessionCheckTimeoutMs = 8000;
+constexpr int kProbeIntervalMs = 6000;
+constexpr int kProbeTimeoutMs = 5000;
 } // namespace
 
 ApiClient::ApiClient(Settings *settings, QObject *parent)
@@ -23,6 +27,8 @@ ApiClient::ApiClient(Settings *settings, QObject *parent)
     , m_settings(settings)
 {
     m_network.setTransferTimeout(kTimeoutMs);
+    m_probeTimer.setInterval(kProbeIntervalMs);
+    connect(&m_probeTimer, &QTimer::timeout, this, &ApiClient::probe);
     if (m_settings) {
         m_refreshToken = m_settings->refreshToken();
         connect(m_settings, &Settings::serverUrlChanged, this, &ApiClient::baseUrlChanged);
@@ -123,6 +129,8 @@ void ApiClient::send(Request request)
     if (!m_accessToken.isEmpty())
         networkRequest.setRawHeader(QByteArrayLiteral("Authorization"),
                                     QByteArrayLiteral("Bearer ") + m_accessToken.toUtf8());
+    if (request.path == QLatin1String("/auth/me") || request.path == QLatin1String("/auth/refresh"))
+        networkRequest.setTransferTimeout(kSessionCheckTimeoutMs);
 
     const QByteArray payload =
         request.body.isNull() ? QByteArray() : request.body.toJson(QJsonDocument::Compact);
@@ -150,6 +158,8 @@ void ApiClient::finish(QNetworkReply *reply, Request request)
     emit busyChanged();
 
     Response response = parse(reply);
+    // Any HTTP answer, even an error, proves the server is there; no answer at all proves it is not.
+    setOffline(response.status == 0);
 
     const bool isRefreshCall = request.path == QLatin1String("/auth/refresh");
 
@@ -224,6 +234,38 @@ void ApiClient::beginRefresh()
     };
 
     send(std::move(refresh));
+}
+
+void ApiClient::setOffline(bool offline)
+{
+    if (m_offline == offline)
+        return;
+    m_offline = offline;
+    if (offline)
+        m_probeTimer.start();
+    else
+        m_probeTimer.stop();
+    qCInfo(lcApi) << (offline ? "server out of reach" : "server reachable again");
+    emit offlineChanged();
+    if (!offline)
+        emit reconnected();
+}
+
+void ApiClient::probe()
+{
+    if (m_probing)
+        return;
+    m_probing = true;
+
+    QNetworkRequest request(QUrl(baseUrl() + QStringLiteral("/health")));
+    request.setTransferTimeout(kProbeTimeoutMs);
+    QNetworkReply *reply = m_network.get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        m_probing = false;
+        if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() > 0)
+            setOffline(false);
+    });
 }
 
 void ApiClient::failWaiting(const QString &reason, int status)
@@ -361,6 +403,10 @@ QString ApiClient::extractError(const Response &response, QNetworkReply *reply)
         }
     }
 
+    // No answer at all: Qt's own wording ("Operation canceled", "Connection refused") says
+    // nothing to the person, who needs to know the server is out of reach.
+    if (response.status == 0)
+        return QStringLiteral("Нет соединения с сервером");
     if (reply->error() != QNetworkReply::NoError)
         return reply->errorString();
     if (response.status != 0)

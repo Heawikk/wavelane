@@ -60,6 +60,50 @@ Popup {
                 width: scroller.width
                 spacing: 0
 
+            // --- Account ---
+            RowLayout {
+                visible: auth.signedIn
+                Layout.fillWidth: true
+                Layout.margins: 18
+                Layout.bottomMargin: 6
+                spacing: 12
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    Mono {
+                        text: qsTr("Аккаунт")
+                        color: Theme.text
+                        font.weight: Font.DemiBold
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: (auth.displayName || auth.username || qsTr("Вы вошли")) + (auth.isAdmin ? " · " + qsTr("администратор") : "")
+                        color: Theme.muted
+                        font.family: Theme.sans
+                        font.pixelSize: Theme.fontSmall
+                        elide: Text.ElideRight
+                    }
+                }
+                FlatButton {
+                    text: qsTr("Выйти")
+                    danger: true
+                    onClicked: {
+                        root.close()
+                        auth.signOut()
+                    }
+                }
+            }
+
+            Rectangle {
+                visible: auth.signedIn
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                Layout.topMargin: 12
+                color: Theme.border
+            }
+
             // --- Looks ---
             ColumnLayout {
                 Layout.fillWidth: true

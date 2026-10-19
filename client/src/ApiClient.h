@@ -7,6 +7,7 @@
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QString>
+#include <QTimer>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -33,6 +34,7 @@ class ApiClient : public QObject
 
     Q_PROPERTY(QString baseUrl READ baseUrl NOTIFY baseUrlChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
+    Q_PROPERTY(bool offline READ offline NOTIFY offlineChanged)
 
 public:
     struct Response
@@ -52,6 +54,8 @@ public:
 
     QString baseUrl() const;
     bool busy() const { return m_inFlight > 0; }
+    //! The last call got no answer at all (no connection, a timeout); the server is not reachable.
+    bool offline() const { return m_offline; }
 
     void setAccessToken(const QString &token);
     void setRefreshToken(const QString &token);
@@ -88,6 +92,9 @@ public:
 signals:
     void baseUrlChanged();
     void busyChanged();
+    void offlineChanged();
+    //! The server answered again after it had been out of reach.
+    void reconnected();
     //! The session could not be renewed; the UI must return to the login page.
     void sessionExpired();
     void tokensRenewed(const QString &accessToken, const QString &refreshToken);
@@ -107,6 +114,8 @@ private:
     void finish(QNetworkReply *reply, Request request);
     void beginRefresh();
     void failWaiting(const QString &reason, int status);
+    void setOffline(bool offline);
+    void probe();
 
     static Response parse(QNetworkReply *reply);
     static QString extractError(const Response &response, QNetworkReply *reply);
@@ -119,4 +128,8 @@ private:
     bool m_refreshing = false;
     QList<Request> m_waiting;   //!< Requests parked while the token is renewed.
     int m_inFlight = 0;
+
+    bool m_offline = false;
+    QTimer m_probeTimer;        //!< While offline, asks the server whether it is back.
+    bool m_probing = false;
 };

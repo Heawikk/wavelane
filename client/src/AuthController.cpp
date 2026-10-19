@@ -11,6 +11,20 @@ AuthController::AuthController(ApiClient *api, Settings *settings, QObject *pare
     , m_settings(settings)
 {
     connect(m_api, &ApiClient::sessionExpired, this, &AuthController::handleSessionExpired);
+
+    m_retryTimer.setInterval(6000);
+    connect(&m_retryTimer, &QTimer::timeout, this, [this]() {
+        if (!m_checking)
+            checkStoredSession();
+    });
+}
+
+void AuthController::setRestoring(bool restoring)
+{
+    if (m_restoring == restoring)
+        return;
+    m_restoring = restoring;
+    emit restoringChanged();
 }
 
 QString AuthController::lastLogin() const
@@ -136,30 +150,61 @@ void AuthController::restoreSession()
         return;
     }
 
-    setBusy(true);
+    setRestoring(true);
+    checkStoredSession();
+}
 
+void AuthController::checkStoredSession()
+{
     // There is no stored access token, only a refresh token. Asking for the
     // profile with no credentials returns 401, which makes ApiClient renew the
     // session and replay the request — so this one call both refreshes and
     // tells us who we are.
-    m_api->get(QStringLiteral("/auth/me"), [this](const ApiClient::Response &response) {
-        setBusy(false);
-        if (!response.ok()) {
-            if (ApiClient::isRejection(response.status)) {
-                // The server refused the session: forget it.
-                m_api->clearTokens();
-            } else {
-                // Offline or the server is restarting. The stored session is
-                // untouched, so the next launch picks up where it left off;
-                // just tell the user why they are looking at a sign-in page.
-                setError(tr("Не удалось связаться с сервером %1. "
-                            "Проверьте, что он запущен.").arg(m_api->baseUrl()));
+    m_checking = true;
+    const int epoch = m_epoch;
+    m_api->get(QStringLiteral("/auth/me"), [this, epoch](const ApiClient::Response &response) {
+        m_checking = false;
+        setRestoring(false);
+        if (epoch != m_epoch)
+            return;     // signed out while the check was under way
+
+        if (response.ok()) {
+            const bool wasUnconfirmed = m_unconfirmed;
+            m_unconfirmed = false;
+            m_retryTimer.stop();
+            applyUser(response.object);
+            if (wasUnconfirmed)
+                emit sessionResumed();
+            emit restoreFinished(true);
+            return;
+        }
+
+        if (ApiClient::isRejection(response.status)) {
+            // The server refused the session: forget it.
+            m_unconfirmed = false;
+            m_retryTimer.stop();
+            m_api->clearTokens();
+            if (m_signedIn) {
+                m_signedIn = false;
+                emit signedInChanged();
+                setError(tr("The session expired, please sign in again"));
             }
             emit restoreFinished(false);
             return;
         }
-        applyUser(response.object);
-        emit restoreFinished(true);
+
+        // Offline or the server is restarting. The stored session is untouched, so let the person
+        // in rather than stop them at a sign-in page; the window shows that there is no connection,
+        // and the check is repeated until the server answers.
+        if (!m_unconfirmed) {
+            m_unconfirmed = true;
+            m_retryTimer.start();
+            if (!m_signedIn) {
+                m_signedIn = true;
+                emit signedInChanged();
+            }
+            emit restoreFinished(false);
+        }
     });
 }
 
@@ -168,6 +213,9 @@ void AuthController::signOut()
     const QString refreshToken = m_settings ? m_settings->refreshToken() : QString();
 
     auto finish = [this]() {
+        ++m_epoch;
+        m_unconfirmed = false;
+        m_retryTimer.stop();
         m_api->clearTokens();
         m_displayName.clear();
         m_username.clear();
@@ -179,7 +227,9 @@ void AuthController::signOut()
         }
     };
 
-    if (refreshToken.isEmpty()) {
+    // With the server out of reach there is nobody to tell, and waiting for the call to time out
+    // would make the button look dead.
+    if (refreshToken.isEmpty() || m_api->offline() || m_unconfirmed) {
         finish();
         return;
     }
@@ -203,6 +253,9 @@ void AuthController::handleSessionExpired()
 {
     if (!m_signedIn)
         return;
+    ++m_epoch;
+    m_unconfirmed = false;
+    m_retryTimer.stop();
     m_signedIn = false;
     emit signedInChanged();
     setError(tr("The session expired, please sign in again"));
