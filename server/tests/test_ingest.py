@@ -206,6 +206,48 @@ async def test_tagged_upload_creates_artist_album_and_genre(
     assert [a["name"] for a in artists.json()["items"]] == ["Tidewater"]
 
 
+_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c489"
+    "0000000d49444154789c6360f8cfc0f01f0005000201a5f645400000000049454e44ae426082"
+)
+
+
+async def _upload(client, api, account, path):
+    with path.open("rb") as handle:
+        response = await client.post(
+            f"{api}/upload",
+            headers=account.headers,
+            files={"files": (path.name, handle, "audio/wav")},
+        )
+    assert response.status_code == 201, response.text
+    return response.json()["items"][0]["track"]
+
+
+async def test_embedded_cover_is_kept_without_an_album_tag(
+    client, api, account, tagged_wav_factory
+):
+    """A single has no album row to hold its artwork; the track must keep it itself."""
+    path = tagged_wav_factory(title="Lone Song", artist="Solo", cover=_PNG)
+    track = await _upload(client, api, account, path)
+
+    assert track["album"] is None
+    assert track["cover_path"]
+
+    image = await client.get(f"{api}/covers/{track['cover_path']}")
+    assert image.status_code == 200
+    assert image.content == _PNG
+
+
+async def test_embedded_cover_of_an_album_track_still_belongs_to_the_album(
+    client, api, account, tagged_wav_factory
+):
+    path = tagged_wav_factory(title="On A Record", artist="Solo", album="Record", cover=_PNG)
+    track = await _upload(client, api, account, path)
+
+    assert track["album"]["cover_path"]
+    assert track["cover_path"] == track["album"]["cover_path"]
+
+
 async def test_tracks_of_one_album_are_grouped(client, api, account, tagged_wav_factory):
     for index in range(3):
         path = tagged_wav_factory(

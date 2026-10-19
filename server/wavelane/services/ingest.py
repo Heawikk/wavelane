@@ -712,6 +712,7 @@ class IngestService:
             explicit=meta.explicit,
             lyrics=meta.lyrics,
             isrc=meta.isrc,
+            cover_path=self._own_cover(meta, album),
             status=TrackStatus.READY,
             uploaded_by_id=uploaded_by_id,
             artist_links=artist_links,
@@ -763,11 +764,15 @@ class IngestService:
                     setattr(track.features, column, getattr(fresh, column))
 
         album = track.album
-        if album is not None and not album.cover_path and meta.cover_data:
+        if meta.cover_data and (album.cover_path if album else track.cover_path) is None:
             try:
-                album.cover_path = self.storage.save_cover(meta.cover_data, meta.cover_mime)
+                cover = self.storage.save_cover(meta.cover_data, meta.cover_mime)
+                if album is not None:
+                    album.cover_path = cover
+                else:
+                    track.cover_path = cover
             except Exception as exc:  # a missing cover must not fail a replacement
-                logger.warning("could not store cover for %s: %s", album.title, exc)
+                logger.warning("could not store cover for %s: %s", track.title, exc)
 
         await self.session.flush()
         if old_path != stored.relative_path:
@@ -895,6 +900,19 @@ class IngestService:
             album.release_year = meta.release_year
             album.release_date = album.release_date or meta.release_date
         return album
+
+    def _own_cover(self, meta: TrackMetadata, album: Album | None) -> str | None:
+        """Store the embedded artwork for a track the album cannot carry it for.
+
+        A single, or a file whose album tag is missing, has no album row to hold the
+        cover; without this its artwork would be read and then thrown away.
+        """
+        if album is None and meta.cover_data:
+            try:
+                return self.storage.save_cover(meta.cover_data, meta.cover_mime)
+            except Exception as exc:
+                logger.warning("could not store cover for %s: %s", meta.title, exc)
+        return None
 
     async def _upsert_genres(self, names: Iterable[str]) -> list[Genre]:
         out: list[Genre] = []

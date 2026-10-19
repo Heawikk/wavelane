@@ -82,6 +82,22 @@ async def init_models() -> None:
     engine = get_engine()
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_add_missing_columns)
+
+
+def _add_missing_columns(connection) -> None:
+    """Add columns that newer code expects to a database made by an older version.
+
+    create_all only creates missing tables, so a column added later would never appear
+    in an existing file. Each entry is (table, column, SQL type).
+    """
+    from sqlalchemy import inspect, text
+
+    wanted = [("tracks", "cover_path", "VARCHAR(500)")]
+    inspector = inspect(connection)
+    for table, column, sql_type in wanted:
+        if column not in {c["name"] for c in inspector.get_columns(table)}:
+            connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {sql_type}"))
 
 
 async def dispose_engine() -> None:

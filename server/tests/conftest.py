@@ -150,9 +150,10 @@ def tag_wav(
     genre: str | None = None,
     year: str | None = None,
     track: str | None = None,
+    cover: bytes | None = None,
 ) -> Path:
     """Write ID3 tags into a WAV, so ingest can be tested against real tags."""
-    from mutagen.id3 import TALB, TCON, TDRC, TIT2, TPE1, TPE2, TRCK
+    from mutagen.id3 import APIC, TALB, TCON, TDRC, TIT2, TPE1, TPE2, TRCK
     from mutagen.wave import WAVE
 
     audio = WAVE(str(path))
@@ -170,6 +171,8 @@ def tag_wav(
         audio.tags.add(TDRC(encoding=3, text=[year]))
     if track:
         audio.tags.add(TRCK(encoding=3, text=[track]))
+    if cover:
+        audio.tags.add(APIC(encoding=3, mime="image/png", type=3, desc="", data=cover))
     audio.save()
     return path
 

@@ -109,6 +109,8 @@ class TrackOut(ORMModel):
     #: Whether the track has words, and whether they follow the music; lists
     #: show a mark for it, so it comes with the track instead of a request each.
     lyrics_kind: Literal["none", "plain", "synced"] = "none"
+    #: The track's own artwork (set only without an album); `cover_path` is what clients read.
+    own_cover: str | None = Field(default=None, exclude=True)
     # Filled in by the API for the requesting user.
     liked: bool | None = None
     disliked: bool | None = None
@@ -127,7 +129,7 @@ class TrackOut(ORMModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def cover_path(self) -> str | None:
-        return self.album.cover_path if self.album else None
+        return self.own_cover or (self.album.cover_path if self.album else None)
 
     @classmethod
     def from_track(
@@ -165,6 +167,7 @@ class TrackOut(ORMModel):
                 else None
             ),
             lyrics_kind=parse_lyrics(track.lyrics).kind,
+            own_cover=track.cover_path,
             liked=liked,
             disliked=disliked,
         )

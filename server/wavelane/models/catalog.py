@@ -128,6 +128,8 @@ class Track(Base, TimestampMixin):
     explicit: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     lyrics: Mapped[str | None] = mapped_column(Text)
     isrc: Mapped[str | None] = mapped_column(String(20), index=True)
+    # Artwork of a track that belongs to no album; with an album, the album holds it.
+    cover_path: Mapped[str | None] = mapped_column(String(500))
     status: Mapped[TrackStatus] = mapped_column(
         Enum(TrackStatus, native_enum=False, length=20),
         default=TrackStatus.PENDING,
