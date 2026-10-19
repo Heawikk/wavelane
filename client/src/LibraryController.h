@@ -117,6 +117,9 @@ private:
     void setSearching(bool searching);
     void setUploading(bool uploading);
     void setUploadStatus(const QString &status);
+    //! Sends the next file of the running upload, or reports the result once none is left.
+    void uploadNext();
+    void finishUpload();
     void setReaction(const QString &trackId, const QString &kind);
     void advanceWithinList();
     bool ownsPlayback() const;
@@ -134,6 +137,19 @@ private:
     bool m_searching = false;
     bool m_uploading = false;
     QString m_uploadStatus;
+    //! Files are sent one request each: a stall costs one file, not the whole batch.
+    struct UploadRun
+    {
+        QStringList pending;
+        int total = 0;
+        int uploaded = 0;
+        int duplicates = 0;
+        int failed = 0;
+        int conflicts = 0;
+        int dropped = 0; //!< consecutive transport failures; the run gives up after a few
+        QString firstError;
+    };
+    UploadRun m_run;
     QString m_query;
     int m_trackCount = 0;
     int m_likedCount = 0;

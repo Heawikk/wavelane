@@ -466,55 +466,93 @@ void LibraryController::uploadFiles(const QList<QUrl> &fileUrls)
     if (localPaths.isEmpty())
         return;
 
+    if (m_uploading)
+        return;
+
+    m_run = UploadRun();
+    m_run.pending = localPaths;
+    m_run.total = localPaths.size();
+
     setUploading(true);
-    setUploadStatus(tr("Загрузка %n файла(ов)…", "", localPaths.size()));
+    uploadNext();
+}
 
-    m_api->uploadFiles(localPaths, [this](const ApiClient::Response &response) {
-        setUploading(false);
+void LibraryController::uploadNext()
+{
+    if (m_run.pending.isEmpty()) {
+        finishUpload();
+        return;
+    }
+
+    const int number = m_run.total - m_run.pending.size() + 1;
+    const QString path = m_run.pending.takeFirst();
+    setUploadStatus(m_run.total > 1 ? tr("Загрузка %1 из %2…").arg(number).arg(m_run.total)
+                                    : tr("Загрузка…"));
+
+    m_api->uploadFiles({path}, [this](const ApiClient::Response &response) {
         if (!response.ok()) {
-            setUploadStatus(response.error);
-            emit notify(response.error);
-            return;
-        }
-
-        const int uploaded = response.object.value(QStringLiteral("uploaded")).toInt();
-        const int duplicates = response.object.value(QStringLiteral("duplicates")).toInt();
-        const int failed = response.object.value(QStringLiteral("failed")).toInt();
-        const int conflicts = response.object.value(QStringLiteral("conflicts")).toInt();
-
-        QStringList parts;
-        if (uploaded > 0)
-            parts << tr("добавлено: %1").arg(uploaded);
-        if (duplicates > 0)
-            parts << tr("уже было: %1").arg(duplicates);
-        if (conflicts > 0)
-            parts << tr("конфликтов: %1").arg(conflicts);
-        if (failed > 0)
-            parts << tr("с ошибкой: %1").arg(failed);
-
-        const QString summary =
-            parts.isEmpty() ? tr("Ничего не добавлено") : parts.join(QStringLiteral(", "));
-        setUploadStatus(summary);
-        emit notify(summary);
-
-        // Surface the first error, which is usually an unsupported format.
-        if (failed > 0) {
-            const QJsonArray items = response.object.value(QStringLiteral("items")).toArray();
-            for (const QJsonValue &value : items) {
-                const QString error =
-                    value.toObject().value(QStringLiteral("error")).toString();
-                if (!error.isEmpty()) {
-                    emit notify(error);
-                    break;
+            // The connection itself failed (or the server refused the request): this file is lost.
+            ++m_run.failed;
+            if (m_run.firstError.isEmpty())
+                m_run.firstError = response.error;
+            // A dead connection would fail every remaining file one timeout at a time.
+            if (++m_run.dropped >= 3) {
+                m_run.failed += m_run.pending.size();
+                m_run.pending.clear();
+            }
+        } else {
+            m_run.dropped = 0;
+            m_run.uploaded += response.object.value(QStringLiteral("uploaded")).toInt();
+            m_run.duplicates += response.object.value(QStringLiteral("duplicates")).toInt();
+            m_run.conflicts += response.object.value(QStringLiteral("conflicts")).toInt();
+            const int failed = response.object.value(QStringLiteral("failed")).toInt();
+            m_run.failed += failed;
+            if (failed > 0 && m_run.firstError.isEmpty()) {
+                const QJsonArray items = response.object.value(QStringLiteral("items")).toArray();
+                for (const QJsonValue &value : items) {
+                    const QString error =
+                        value.toObject().value(QStringLiteral("error")).toString();
+                    if (!error.isEmpty()) {
+                        m_run.firstError = error;
+                        break;
+                    }
                 }
             }
         }
-
-        loadCatalogue();
-        loadStats();
-        if (conflicts > 0)
-            loadConflicts();
+        uploadNext();
     });
+}
+
+void LibraryController::finishUpload()
+{
+    setUploading(false);
+
+    QStringList parts;
+    if (m_run.uploaded > 0)
+        parts << tr("добавлено: %1").arg(m_run.uploaded);
+    if (m_run.duplicates > 0)
+        parts << tr("уже было: %1").arg(m_run.duplicates);
+    if (m_run.conflicts > 0)
+        parts << tr("конфликтов: %1").arg(m_run.conflicts);
+    if (m_run.failed > 0)
+        parts << tr("с ошибкой: %1").arg(m_run.failed);
+
+    const QString summary =
+        parts.isEmpty() ? tr("Ничего не добавлено") : parts.join(QStringLiteral(", "));
+    setUploadStatus(summary);
+    emit notify(summary);
+
+    // Surface the first error, which is usually an unsupported format or a lost connection.
+    if (m_run.failed > 0 && !m_run.firstError.isEmpty())
+        emit notify(m_run.firstError);
+
+    const int conflicts = m_run.conflicts;
+    m_run = UploadRun();
+
+    loadCatalogue();
+    loadStats();
+    if (conflicts > 0)
+        loadConflicts();
 }
 
 void LibraryController::applyLyricsKind(const QString &trackId, const QString &kind)

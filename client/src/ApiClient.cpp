@@ -15,6 +15,7 @@ Q_LOGGING_CATEGORY(lcApi, "wavelane.api")
 namespace {
 constexpr auto kApiPrefix = "/api/v1";
 constexpr int kTimeoutMs = 30000;
+constexpr int kUploadTimeoutMs = 5 * 60 * 1000;
 } // namespace
 
 ApiClient::ApiClient(Settings *settings, QObject *parent)
@@ -296,8 +297,10 @@ void ApiClient::uploadFiles(const QStringList &localPaths, Callback callback)
     if (!m_accessToken.isEmpty())
         request.setRawHeader(QByteArrayLiteral("Authorization"),
                              QByteArrayLiteral("Bearer ") + m_accessToken.toUtf8());
-    // Uploads can be large; the default transfer timeout would abort them.
-    request.setTransferTimeout(0);
+    // Uploads can be large and the uplink slow. The timeout counts time without any bytes moving,
+    // and a request-level 0 does not switch it off (the manager's 30 s then applies), so give it
+    // a long explicit one.
+    request.setTransferTimeout(kUploadTimeoutMs);
 
     QNetworkReply *reply = m_network.post(request, multiPart);
     multiPart->setParent(reply);
