@@ -285,7 +285,7 @@ installed app can only be updated with the same key.
 
 Qt has no TLS of its own on Android, so https:// (the update check, a server behind HTTPS) needs OpenSSL
 next to the app: put `libssl_3.so` and `libcrypto_3.so` from the `ssl_3/arm64-v8a` folder of
-[KDAB/android_openssl](https://github.com/KDAB/android_openssl) into `toolsndroid\opensslrm64-v8a` (or point
+[KDAB/android_openssl](https://github.com/KDAB/android_openssl) into `tools/android/openssl/arm64-v8a` (or point
 `-DWAVELANE_OPENSSL_DIR` elsewhere). Without them the build warns and https fails.
 
 The look is the same, but the layout is its own (`MobileMain.qml`): the tabs
