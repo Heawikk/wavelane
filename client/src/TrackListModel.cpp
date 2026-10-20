@@ -125,6 +125,21 @@ int TrackListModel::indexOfId(const QString &id) const
     return -1;
 }
 
+void TrackListModel::replaceTrack(const Track &track)
+{
+    const int row = indexOfId(track.id);
+    if (row < 0)
+        return;
+    // What a PATCH answer cannot tell (the wave's reason and stream link) stays as it was.
+    Track merged = track;
+    merged.streamUrl = m_tracks.at(row).streamUrl;
+    merged.score = m_tracks.at(row).score;
+    merged.reasonSummary = m_tracks.at(row).reasonSummary;
+    m_tracks[row] = merged;
+    const QModelIndex changed = index(row);
+    emit dataChanged(changed, changed);
+}
+
 void TrackListModel::setReaction(const QString &trackId, bool liked, bool disliked)
 {
     const int row = indexOfId(trackId);

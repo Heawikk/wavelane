@@ -13,6 +13,43 @@ ListView {
     property string context: "search"
     property bool playable: true
     property string emptyText: ""
+    //! Shown above the rows, scrolling with them (search puts artists and albums here).
+    property Component topContent: null
+    property bool topHasContent: false
+    //! Administrators get a pencil on each row, which asks for the track to be edited.
+    property bool editable: false
+
+    signal editRequested(string trackId)
+
+    //! The list has been scrolled to its last row.
+    signal endReached()
+
+    //! Back to the first row (and the content above it), for a list that was just replaced.
+    function toTop() {
+        stickToTop = true
+        contentY = topY()
+        stickTimer.restart()
+    }
+
+    //! Where the list is scrolled to when its first thing, the content above the rows
+    //! included, is at the top edge.
+    function topY() {
+        return (headerItem ? headerItem.y : originY) - topMargin
+    }
+
+    // The content above the rows changes height while it is laid out, and the list shifts to
+    // keep the rows where they were; for a moment after toTop() it is put back each time.
+    property bool stickToTop: false
+    Timer {
+        id: stickTimer
+        interval: 700
+        onTriggered: root.stickToTop = false
+    }
+    onContentYChanged: if (stickToTop && !dragging && !flicking && Math.abs(contentY - topY()) > 0.5) contentY = topY()
+    onMovementStarted: stickToTop = false
+
+    header: topContent
+    onAtYEndChanged: if (atYEnd && count > 0) endReached()
 
     clip: true
     boundsBehavior: Flickable.StopAtBounds
@@ -100,6 +137,14 @@ ListView {
             }
 
             IconButton {
+                visible: root.editable && auth.isAdmin
+                size: 44
+                glyph: Theme.iEdit
+                glyphSize: 18
+                onClicked: root.editRequested(row.trackId)
+            }
+
+            IconButton {
                 size: 44
                 glyph: row.liked ? Theme.iHeartFill : Theme.iHeart
                 glyphSize: 18
@@ -118,7 +163,7 @@ ListView {
     Mono {
         anchors.centerIn: parent
         width: parent.width - 48
-        visible: root.count === 0
+        visible: root.count === 0 && !root.topHasContent
         text: root.emptyText
         color: Theme.faint
         wrapMode: Text.WordWrap

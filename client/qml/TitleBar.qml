@@ -16,25 +16,27 @@ Rectangle {
     required property var window
     property string page: "wave"
     property bool detailOpen: true
-    //! The collection's active tab, which decides whether the detail toggle applies.
+    //! The active tab of the collection and of the admin menu, which decide whether the
+    //! detail toggle applies.
     property int collectionTab: 0
+    property int adminTab: 0
 
     signal toggleDetail()
-    signal openUpload()
-    signal openImport()
-    signal showConflicts()
 
     readonly property bool signedIn: auth.signedIn
     readonly property bool maximized: window.visibility === Window.Maximized
     readonly property bool onWave: signedIn && page === "wave"
     readonly property bool onSearch: signedIn && page === "search"
     readonly property bool onCollection: signedIn && page === "collection"
+    readonly property bool onAdmin: signedIn && page === "admin"
 
     // The numbers follow the order of the sidebar.
-    readonly property string pageNumber: page === "search" ? "01" : page === "wave" ? "02" : "03"
+    readonly property string pageNumber: page === "search" ? "01" : page === "wave" ? "02"
+                                         : page === "collection" ? "03" : "04"
     readonly property string pageTitle: page === "search" ? qsTr("Поиск")
                                         : page === "wave" ? qsTr("Моя волна")
-                                        : qsTr("Коллекция")
+                                        : page === "collection" ? qsTr("Коллекция")
+                                        : qsTr("Админ меню")
 
     color: signedIn ? "transparent" : Theme.bar
 
@@ -180,46 +182,9 @@ Rectangle {
             onClicked: root.toggleDetail()
         }
 
-        // --- Коллекция ---
-        Mono {
-            visible: root.onCollection && library.uploadStatus !== ""
-            Layout.alignment: Qt.AlignVCenter
-            Layout.rightMargin: 12
-            text: library.uploadStatus
-            font.capitalization: Font.MixedCase
-            color: library.uploading ? Theme.accentText : Theme.muted
-        }
-        FlatButton {
-            visible: root.onCollection && auth.isAdmin && library.conflicts.length > 0
-            Layout.alignment: Qt.AlignVCenter
-            Layout.rightMargin: 6
-            implicitHeight: 26
-            text: qsTr("Конфликты: %1").arg(library.conflicts.length)
-            onClicked: root.showConflicts()
-        }
-        // Adding music is for administrators; everyone else just listens.
-        FlatButton {
-            visible: root.onCollection && auth.isAdmin
-            Layout.alignment: Qt.AlignVCenter
-            Layout.rightMargin: 6
-            implicitHeight: 26
-            glyph: Theme.iFolder
-            text: qsTr("Импорт папки")
-            enabledWhen: !library.importActive
-            onClicked: root.openImport()
-        }
-        FlatButton {
-            visible: root.onCollection && auth.isAdmin
-            Layout.alignment: Qt.AlignVCenter
-            Layout.rightMargin: 6
-            implicitHeight: 26
-            glyph: Theme.iAdd
-            text: library.uploading ? qsTr("Загрузка…") : qsTr("Загрузить файлы")
-            enabledWhen: !library.uploading
-            onClicked: root.openUpload()
-        }
+        // --- Коллекция, Админ меню ---
         IconButton {
-            visible: root.onCollection && root.collectionTab < 3
+            visible: (root.onCollection && root.collectionTab < 2) || (root.onAdmin && root.adminTab === 1)
             Layout.alignment: Qt.AlignVCenter
             Layout.rightMargin: 8
             glyph: Theme.iPanel

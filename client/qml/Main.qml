@@ -37,6 +37,8 @@ ApplicationWindow {
         window.page = name
         if (name === "collection")
             collectionPage.refresh()
+        else if (name === "admin")
+            adminPage.refresh()
     }
 
     //! Sparks from the like or dislike button to the wave's blobs (or up, off the wave page).
@@ -97,6 +99,11 @@ ApplicationWindow {
                 window.loadEverything()
             }
         }
+        // The admin menu is for administrators: leave it if that stops being true.
+        function onUserChanged() {
+            if (!auth.isAdmin && window.page === "admin")
+                window.page = "wave"
+        }
     }
 
     // --- keyboard ---------------------------------------------------------
@@ -112,8 +119,8 @@ ApplicationWindow {
         enabled: auth.signedIn && auth.isAdmin
         sequences: ["Ctrl+U"]
         onActivated: {
-            window.showPage("collection")
-            collectionPage.openUpload()
+            window.showPage("admin")
+            adminPage.openUpload()
         }
     }
     Shortcut {
@@ -212,10 +219,8 @@ ApplicationWindow {
                         page: window.page
                         detailOpen: window.detailOpen
                         collectionTab: collectionPage.tab
+                        adminTab: adminPage.tab
                         onToggleDetail: window.detailOpen = !window.detailOpen
-                        onOpenUpload: collectionPage.openUpload()
-                        onOpenImport: collectionPage.openImport()
-                        onShowConflicts: conflictDialog.open()
                     }
 
                     OfflineBadge {
@@ -231,7 +236,8 @@ ApplicationWindow {
                         StackLayout {
                             anchors.fill: parent
                             currentIndex: window.page === "search" ? 0
-                                          : window.page === "wave" ? 1 : 2
+                                          : window.page === "wave" ? 1
+                                          : window.page === "collection" ? 2 : 3
 
                             SearchPage {
                                 id: searchPage
@@ -240,6 +246,10 @@ ApplicationWindow {
                             WavePage { id: wavePage }
                             CollectionPage {
                                 id: collectionPage
+                                detailOpen: window.detailOpen
+                            }
+                            AdminPage {
+                                id: adminPage
                                 detailOpen: window.detailOpen
                                 onShowConflicts: conflictDialog.open()
                             }

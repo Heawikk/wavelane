@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, computed_field
 
@@ -183,12 +183,22 @@ class TrackUpdate(ORMModel):
     lyrics: str | None = None
     isrc: str | None = Field(default=None, max_length=20)
     genres: list[str] | None = None
+    #: Who the track is by. A part that is left out stays as it was; the main artists
+    #: cannot be emptied.
+    artists: list[Annotated[str, Field(max_length=300)]] | None = Field(default=None, max_length=20)
+    featured_artists: list[Annotated[str, Field(max_length=300)]] | None = Field(
+        default=None, max_length=20
+    )
+    #: The album's title; an empty one takes the track off its album.
+    album: str | None = Field(default=None, max_length=400)
+    release_year: int | None = Field(default=None, ge=1860, le=2200)
 
 
 class ArtistUpdate(ORMModel):
     name: str | None = Field(default=None, min_length=1, max_length=300)
     bio: str | None = None
-    country: str | None = Field(default=None, min_length=2, max_length=2)
+    #: Two letters, or empty to clear it.
+    country: str | None = Field(default=None, pattern=r"^([A-Za-z]{2})?$")
 
 
 class AlbumUpdate(ORMModel):

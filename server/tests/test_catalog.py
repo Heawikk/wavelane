@@ -166,6 +166,52 @@ async def test_search_finds_tracks_by_title(client, api, account, upload_track):
     assert missing.json()["tracks"] == []
 
 
+async def test_search_finds_the_albums_of_an_artist(client, api, account, tagged_wav_factory):
+    for index, (album, title) in enumerate([("Trench", "Jumpsuit"), ("Blurryface", "Ride")]):
+        path = tagged_wav_factory(
+            filename=f"album-{index}.wav",
+            title=title,
+            artist="Skyline Pilots",
+            album=album,
+            freqs=(300.0 + index * 90,),
+        )
+        with path.open("rb") as handle:
+            response = await client.post(
+                f"{api}/upload",
+                headers=account.headers,
+                files={"files": (path.name, handle, "audio/wav")},
+            )
+        assert response.status_code == 201, response.text
+
+    found = (await client.get(f"{api}/search?q=skyline", headers=account.headers)).json()
+
+    assert [a["name"] for a in found["artists"]] == ["Skyline Pilots"]
+    assert sorted(a["title"] for a in found["albums"]) == ["Blurryface", "Trench"]
+
+
+async def test_search_finds_albums_an_artist_only_appears_on(
+    client, api, account, tagged_wav_factory
+):
+    path = tagged_wav_factory(
+        filename="compilation.wav",
+        title="Guest Spot",
+        artist="Riverside Duo",
+        album="Various Hits",
+        album_artist="Various Artists",
+    )
+    with path.open("rb") as handle:
+        response = await client.post(
+            f"{api}/upload",
+            headers=account.headers,
+            files={"files": (path.name, handle, "audio/wav")},
+        )
+    assert response.status_code == 201, response.text
+
+    found = (await client.get(f"{api}/search?q=riverside", headers=account.headers)).json()
+
+    assert [a["title"] for a in found["albums"]] == ["Various Hits"]
+
+
 async def test_track_metadata_can_be_corrected(client, api, account, upload_track):
     track = (await upload_track(account, "wrong-title.wav"))["track"]
 

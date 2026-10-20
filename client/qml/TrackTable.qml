@@ -23,9 +23,15 @@ Item {
     property bool showNowPlaying: false
     property string emptyText: ""
     property string selectedId: ""
+    //! Shown above the rows, scrolling with them (search puts artists and albums here).
+    property Component topContent: null
+    //! Whether that content has anything in it; the empty text waits while it does.
+    property bool topHasContent: false
 
     signal trackSelected(string trackId)
     signal deleteRequested(string trackId)
+    //! The list has been scrolled to its last row.
+    signal endReached()
 
     readonly property int gap: 12
     readonly property bool wide: width > 760
@@ -56,15 +62,29 @@ Item {
             library.playFrom(model, row, root.context)
     }
 
+    //! Back to the first row (and the content above it), for a list that was just replaced.
+    function toTop() {
+        list.stickToTop = true
+        list.contentY = list.topY()
+        stickTimer.restart()
+    }
+
+    // The content above the rows changes height while it is laid out (pictures, shelves,
+    // a hidden page coming back), and the list shifts to keep the rows where they were. For a
+    // moment after being sent to the top it is put back each time that happens.
+    Timer {
+        id: stickTimer
+        interval: 700
+        onTriggered: list.stickToTop = false
+    }
+
     function selectedRow() {
         return model && selectedId !== "" ? model.indexOfId(selectedId) : -1
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 0
+    Component {
+        id: columnHeader
 
-        // --- column header ---
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 30
@@ -124,6 +144,21 @@ Item {
                 Item { Layout.preferredWidth: 36 }
             }
         }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        // --- column header ---
+        // Fixed above the rows, unless there is content above the rows, in which case it
+        // comes after that content and scrolls.
+        Loader {
+            Layout.fillWidth: true
+            Layout.preferredHeight: active ? 30 : 0
+            active: root.topContent === null
+            sourceComponent: columnHeader
+        }
 
         // --- rows ---
         ListView {
@@ -139,6 +174,18 @@ Item {
             activeFocusOnTab: true
 
             ScrollBar.vertical: FlatScrollBar {}
+
+            property bool stickToTop: false
+
+            //! Where the list is scrolled to when its first thing, the content above the rows
+            //! included, is at the top edge.
+            function topY() {
+                return (headerItem ? headerItem.y : originY) - topMargin
+            }
+
+            onAtYEndChanged: if (atYEnd && count > 0) root.endReached()
+            onContentYChanged: if (stickToTop && !dragging && !flicking && Math.abs(contentY - topY()) > 0.5) contentY = topY()
+            onMovementStarted: stickToTop = false
 
             Keys.onPressed: function(event) {
                 const row = root.selectedRow()
@@ -159,6 +206,21 @@ Item {
 
             header: Column {
                 width: list.width
+
+                Loader {
+                    width: parent.width
+                    active: root.topContent !== null
+                    visible: active
+                    sourceComponent: root.topContent
+                }
+
+                Loader {
+                    width: parent.width
+                    height: active ? 30 : 0
+                    active: root.topContent !== null
+                    visible: active
+                    sourceComponent: columnHeader
+                }
 
                 Item {
                     width: parent.width
@@ -205,6 +267,7 @@ Item {
                     colTime: root.colTime
 
                     onClicked: root.trackSelected(trackId)
+                    onPlayToggled: player.togglePlayPause()
                     onLikeToggled: library.toggleLike(trackId)
                 }
 
@@ -246,6 +309,7 @@ Item {
                 playingNow: player.hasTrack && player.currentTrack.id === trackId
                             && !root.showNowPlaying
                 showReason: root.showNowPlaying
+                playable: root.playable
 
                 gap: root.gap
                 colIndex: root.colIndex
@@ -263,6 +327,14 @@ Item {
                     root.select(index)
                     root.activate(index)
                 }
+                onPlayToggled: {
+                    if (playingNow) {
+                        player.togglePlayPause()
+                    } else {
+                        root.select(index)
+                        root.activate(index)
+                    }
+                }
                 onLikeToggled: library.toggleLike(trackId)
             }
         }
@@ -274,6 +346,7 @@ Item {
         anchors.centerIn: parent
         width: parent.width * 0.7
         visible: root.model && root.model.count === 0 && !root.nowPlayingShown
+                 && !root.topHasContent
         text: root.emptyText
         color: Theme.faint
         wrapMode: Text.WordWrap

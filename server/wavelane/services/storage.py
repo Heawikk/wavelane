@@ -230,6 +230,15 @@ _JPEG_MAGIC = b"\xff\xd8\xff"
 _WEBP_MAGIC = b"WEBP"
 
 
+def looks_like_image(data: bytes) -> bool:
+    """Whether the bytes really are a PNG, JPEG or WebP picture, whatever they are called."""
+    return (
+        data.startswith(_PNG_MAGIC)
+        or data.startswith(_JPEG_MAGIC)
+        or (data[:4] == b"RIFF" and data[8:12] == _WEBP_MAGIC)
+    )
+
+
 def _image_extension(data: bytes, mime: str | None) -> str:
     if data.startswith(_PNG_MAGIC):
         return ".png"

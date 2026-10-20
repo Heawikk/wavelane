@@ -19,6 +19,7 @@ Rectangle {
 
     signal playRequested()
     signal deleteRequested()
+    signal editRequested()
 
     color: Theme.panel
 
@@ -291,10 +292,17 @@ Rectangle {
 
                     Item { Layout.fillWidth: true }
 
-                    // removing music from the library is for administrators
+                    // correcting and removing music are for administrators
                     IconButton {
                         visible: auth.isAdmin
-                        size: 30
+                        size: 28
+                        glyph: Theme.iEdit
+                        tooltip: qsTr("Изменить метаданные")
+                        onClicked: root.editRequested()
+                    }
+                    IconButton {
+                        visible: auth.isAdmin
+                        size: 28
                         glyph: Theme.iDelete
                         activeColor: Theme.negative
                         tooltip: qsTr("Удалить из библиотеки · Del")

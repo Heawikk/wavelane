@@ -14,9 +14,19 @@ constexpr auto kVisualizer = "looks/visualizer";
 constexpr auto kDefaultServer = "http://127.0.0.1:8000";
 } // namespace
 
+namespace {
+//! WAVELANE_PROFILE=name keeps a second set of settings (server, session, looks) next to the
+//! real one, so a test copy can sign in somewhere else without touching the installed app.
+QString storeName()
+{
+    const QString profile = qEnvironmentVariable("WAVELANE_PROFILE");
+    return profile.isEmpty() ? QStringLiteral("Client") : QStringLiteral("Client-") + profile;
+}
+} // namespace
+
 Settings::Settings(QObject *parent)
     : QObject(parent)
-    , m_store(QStringLiteral("Wavelane"), QStringLiteral("Client"))
+    , m_store(QStringLiteral("Wavelane"), storeName())
 {
 }
 

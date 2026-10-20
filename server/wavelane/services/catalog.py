@@ -78,6 +78,27 @@ def _search_terms(query: str) -> tuple[str, str]:
     return needle, f"%{needle}%"
 
 
+def track_matches(pattern: str):
+    """The condition for "the title, an artist or the album of this track contains the text"."""
+    return or_(
+        Track.normalized_title.like(pattern),
+        Track.artist_links.any(
+            TrackArtist.artist_id.in_(
+                select(Artist.id).where(Artist.normalized_name.like(pattern)).scalar_subquery()
+            )
+        ),
+        Track.album_id.in_(
+            select(Album.id).where(Album.normalized_title.like(pattern)).scalar_subquery()
+        ),
+    )
+
+
+def search_pattern(query: str) -> str | None:
+    """The LIKE pattern for a search text, or None when there is nothing to look for."""
+    needle, pattern = _search_terms(query)
+    return pattern if needle else None
+
+
 async def search_tracks(
     session: AsyncSession, query: str, limit: int = 20, offset: int = 0
 ) -> list[Track]:
@@ -90,23 +111,7 @@ async def search_tracks(
     # normalised columns keep this usable and portable until then.
     statement = (
         ready_tracks()
-        .where(
-            or_(
-                Track.normalized_title.like(pattern),
-                Track.artist_links.any(
-                    TrackArtist.artist_id.in_(
-                        select(Artist.id)
-                        .where(Artist.normalized_name.like(pattern))
-                        .scalar_subquery()
-                    )
-                ),
-                Track.album_id.in_(
-                    select(Album.id)
-                    .where(Album.normalized_title.like(pattern))
-                    .scalar_subquery()
-                ),
-            )
-        )
+        .where(track_matches(pattern))
         .order_by(
             Track.normalized_title.like(f"{needle}%").desc(),
             Track.play_count.desc(),
@@ -142,9 +147,21 @@ async def search_albums(session: AsyncSession, query: str, limit: int = 10) -> l
     needle, pattern = _search_terms(query)
     if not needle:
         return []
+    # An artist's name finds their albums (the ones filed under them, and the ones they are
+    # on) as well as albums with that word in the title.
+    matching_artists = select(Artist.id).where(Artist.normalized_name.like(pattern))
+    owned = Album.artist_id.in_(matching_artists.scalar_subquery())
+    appears_on = Album.id.in_(
+        select(Track.album_id)
+        .join(TrackArtist, TrackArtist.track_id == Track.id)
+        .where(
+            Track.album_id.is_not(None),
+            TrackArtist.artist_id.in_(matching_artists.scalar_subquery()),
+        )
+    )
     rows = await session.scalars(
         select(Album)
-        .where(Album.normalized_title.like(pattern))
+        .where(or_(Album.normalized_title.like(pattern), owned, appears_on))
         .order_by(
             Album.normalized_title.like(f"{needle}%").desc(),
             Album.release_year.desc().nullslast(),

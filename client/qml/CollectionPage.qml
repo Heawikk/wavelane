@@ -1,12 +1,11 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Dialogs
 import QtQuick.Layouts
 import Wavelane
 
 /*!
-    Everything of yours: liked tracks, the whole catalogue, what the wave has
-    played, and what it has learned about you. Uploading lives here too.
+    Everything of yours: liked tracks, what the wave has played, and what it has
+    learned about you. The whole catalogue and uploading are in the admin menu.
 */
 Item {
     id: root
@@ -14,45 +13,20 @@ Item {
     property bool detailOpen: true
     property int tab: 0
 
-    signal showConflicts()
-
     readonly property var tabs: [
         { value: "0", label: qsTr("Избранное") },
-        { value: "1", label: qsTr("Каталог") },
-        { value: "2", label: qsTr("История") },
-        { value: "3", label: qsTr("Профиль вкуса") }
+        { value: "1", label: qsTr("История") },
+        { value: "2", label: qsTr("Профиль вкуса") }
     ]
-
-    function openUpload() { fileDialog.open() }
-    function openImport() { folderDialog.open() }
 
     function refresh() {
         if (tab === 0)
             library.loadLiked()
-        else if (tab === 1)
-            library.loadCatalogue()
-        else if (tab === 3)
+        else if (tab === 2)
             wave.refreshProfile()
     }
 
     onTabChanged: refresh()
-
-    FileDialog {
-        id: fileDialog
-        title: qsTr("Выберите аудиофайлы")
-        fileMode: FileDialog.OpenFiles
-        nameFilters: [
-            qsTr("Аудио (*.mp3 *.flac *.m4a *.ogg *.opus *.wav *.aac *.wma *.aiff)"),
-            qsTr("Все файлы (*)")
-        ]
-        onAccepted: library.uploadFiles(selectedFiles)
-    }
-
-    FolderDialog {
-        id: folderDialog
-        title: qsTr("Выберите папку с музыкой")
-        onAccepted: library.importFolder(selectedFolder)
-    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -75,9 +49,8 @@ Item {
                 anchors.right: parent.right
                 anchors.rightMargin: 16
                 anchors.verticalCenter: parent.verticalCenter
-                visible: root.tab < 2
-                text: root.tab === 0 ? qsTr("Треков: ") + library.likedCount
-                                     : qsTr("Треков: ") + library.trackCount
+                visible: root.tab === 0
+                text: qsTr("Треков: ") + library.likedCount
                 color: Theme.faint
             }
         }
@@ -88,36 +61,28 @@ Item {
             color: Theme.border
         }
 
-        ImportBanner {
-            Layout.fillWidth: true
-            onShowConflicts: root.showConflicts()
-        }
-
         Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
 
             TrackBrowser {
                 anchors.fill: parent
-                visible: root.tab < 3
+                visible: root.tab < 2
 
-                model: root.tab === 0 ? library.liked
-                       : root.tab === 1 ? library.catalogue
-                       : wave.history
-                context: root.tab === 0 ? "liked" : "catalogue"
+                model: root.tab === 0 ? library.liked : wave.history
+                context: "liked"
                 // History rows carry stream links minted when the track was
                 // served, which expire, so they are for reading, not replaying.
-                playable: root.tab < 2
+                playable: root.tab === 0
                 detailOpen: root.detailOpen
                 emptyText: root.tab === 0 ? qsTr("Пока ничего не нравится. Ставьте ♥ — и треки появятся здесь.")
-                           : root.tab === 1 ? qsTr("Каталог пуст. Загрузите аудиофайлы: сервер прочитает теги, обложки и проанализирует звук.")
                            : qsTr("Пока пусто. Включите волну — здесь появится всё, что в ней прозвучало.")
             }
 
             // what the wave has learned, as aligned text like a log
             Flickable {
                 anchors.fill: parent
-                visible: root.tab === 3
+                visible: root.tab === 2
                 contentWidth: width
                 contentHeight: profileColumn.implicitHeight + 32
                 boundsBehavior: Flickable.StopAtBounds

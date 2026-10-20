@@ -335,7 +335,26 @@ void ApiClient::uploadFiles(const QStringList &localPaths, Callback callback)
         return;
     }
 
-    QNetworkRequest request(resolve(QStringLiteral("/upload")));
+    sendMultipart(QStringLiteral("/upload"), multiPart, std::move(callback));
+}
+
+void ApiClient::uploadBytes(const QString &path, const QString &field, const QString &fileName,
+                            const QByteArray &bytes, const QString &mimeType, Callback callback)
+{
+    auto *multiPart = new QHttpMultiPart(QHttpMultiPart::FormDataType);
+    QHttpPart part;
+    part.setHeader(QNetworkRequest::ContentDispositionHeader,
+                   QVariant(QStringLiteral("form-data; name=\"%1\"; filename=\"%2\"")
+                                .arg(field, fileName)));
+    part.setHeader(QNetworkRequest::ContentTypeHeader, QVariant(mimeType));
+    part.setBody(bytes);
+    multiPart->append(part);
+    sendMultipart(path, multiPart, std::move(callback));
+}
+
+void ApiClient::sendMultipart(const QString &path, QHttpMultiPart *multiPart, Callback callback)
+{
+    QNetworkRequest request(resolve(path));
     if (!m_accessToken.isEmpty())
         request.setRawHeader(QByteArrayLiteral("Authorization"),
                              QByteArrayLiteral("Bearer ") + m_accessToken.toUtf8());

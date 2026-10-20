@@ -17,6 +17,7 @@ from sqlalchemy.exc import IntegrityError
 
 from . import __version__
 from .api.routers import (
+    admin,
     auth,
     catalog,
     imports,
@@ -135,7 +136,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         expose_headers=["Content-Range", "Accept-Ranges", "X-Track-Duration-Ms"],
     )
 
-    for module in (auth, catalog, wave, library, lyrics, playlists, upload, imports, stream):
+    for module in (auth, admin, catalog, wave, library, lyrics, playlists, upload, imports, stream):
         app.include_router(module.router, prefix=settings.api_prefix)
 
     @app.exception_handler(IntegrityError)

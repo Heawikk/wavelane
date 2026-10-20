@@ -10,6 +10,10 @@ ColumnLayout {
     property string label: ""
     property string text: ""
     property string placeholder: ""
+    //! What is in the field right now (as opposed to `text`, which is only where it starts).
+    property alias inputText: input.text
+    property alias validator: input.validator
+    property alias maxLength: input.maximumLength
 
     signal committed(string value)
 

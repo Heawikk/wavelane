@@ -4,9 +4,16 @@
 #include "Player.h"
 #include "TrackListModel.h"
 
+#include <QBuffer>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QUrlQuery>
+
+#include <algorithm>
 
 LibraryController::LibraryController(ApiClient *api, Player *player, QObject *parent)
     : QObject(parent)
@@ -15,6 +22,8 @@ LibraryController::LibraryController(ApiClient *api, Player *player, QObject *pa
     , m_searchResults(new TrackListModel(this))
     , m_liked(new TrackListModel(this))
     , m_catalogue(new TrackListModel(this))
+    , m_browse(new TrackListModel(this))
+    , m_adminArtists(new ArtistListModel(this))
 {
     connect(m_player, &Player::trackCompleted, this, [this](const QString &) {
         if (ownsPlayback())
@@ -75,6 +84,7 @@ void LibraryController::search(const QString &text)
     }
     if (trimmed.isEmpty()) {
         m_searchResults->clear();
+        setSearchGroups({}, {});
         return;
     }
 
@@ -95,7 +105,43 @@ void LibraryController::search(const QString &text)
                    }
                    m_searchResults->setTracks(
                        parseTracks(response.object.value(QStringLiteral("tracks")).toArray()));
+
+                   QVariantList artists;
+                   for (const QJsonValue &value :
+                        response.object.value(QStringLiteral("artists")).toArray()) {
+                       const QJsonObject artist = value.toObject();
+                       artists.append(QVariantMap{
+                           {QStringLiteral("id"), artist.value(QStringLiteral("id")).toString()},
+                           {QStringLiteral("name"), artist.value(QStringLiteral("name")).toString()},
+                           {QStringLiteral("imagePath"),
+                            artist.value(QStringLiteral("image_path")).toString()},
+                       });
+                   }
+                   QVariantList albums;
+                   for (const QJsonValue &value :
+                        response.object.value(QStringLiteral("albums")).toArray()) {
+                       const QJsonObject album = value.toObject();
+                       const int year = album.value(QStringLiteral("release_year")).toInt();
+                       albums.append(QVariantMap{
+                           {QStringLiteral("id"), album.value(QStringLiteral("id")).toString()},
+                           {QStringLiteral("title"), album.value(QStringLiteral("title")).toString()},
+                           {QStringLiteral("coverPath"),
+                            album.value(QStringLiteral("cover_path")).toString()},
+                           {QStringLiteral("year"), year > 0 ? QString::number(year) : QString()},
+                       });
+                   }
+                   setSearchGroups(artists, albums);
                });
+}
+
+void LibraryController::setSearchGroups(const QVariantList &artists, const QVariantList &albums)
+{
+    if (m_searchArtists.isEmpty() && m_searchAlbums.isEmpty() && artists.isEmpty()
+        && albums.isEmpty())
+        return;
+    m_searchArtists = artists;
+    m_searchAlbums = albums;
+    emit searchGroupsChanged();
 }
 
 void LibraryController::clearSearch()
@@ -103,6 +149,77 @@ void LibraryController::clearSearch()
     m_query.clear();
     emit queryChanged();
     m_searchResults->clear();
+    setSearchGroups({}, {});
+}
+
+void LibraryController::openArtist(const QString &artistId, const QString &name)
+{
+    openBrowse(QStringLiteral("artist"), artistId, name,
+               QStringLiteral("/artists/%1/tracks").arg(artistId));
+}
+
+void LibraryController::openAlbum(const QString &albumId, const QString &title)
+{
+    openBrowse(QStringLiteral("album"), albumId, title,
+               QStringLiteral("/albums/%1/tracks").arg(albumId));
+}
+
+void LibraryController::openBrowse(const QString &kind, const QString &id, const QString &title,
+                                   const QString &path)
+{
+    if (id.isEmpty())
+        return;
+    m_browseKind = kind;
+    m_browseId = id;
+    m_browseTitle = title;
+    m_browseLoading = true;
+    m_browse->clear();
+    emit browseChanged();
+
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("limit"), QStringLiteral("200"));
+    m_api->get(path, query, [this, id](const ApiClient::Response &response) {
+        // Closed, or another one opened, while this was on its way.
+        if (id != m_browseId)
+            return;
+        m_browseLoading = false;
+        emit browseChanged();
+        if (!response.ok()) {
+            emit notify(response.error);
+            return;
+        }
+        // An album's tracks come as a plain list, an artist's as a page.
+        const QJsonArray items = response.array.isEmpty()
+                                     ? response.object.value(QStringLiteral("items")).toArray()
+                                     : response.array;
+        m_browse->setTracks(parseTracks(items));
+    });
+}
+
+void LibraryController::closeBrowse()
+{
+    if (m_browseKind.isEmpty())
+        return;
+    m_browseKind.clear();
+    m_browseId.clear();
+    m_browseTitle.clear();
+    m_browseLoading = false;
+    m_browse->clear();
+    emit browseChanged();
+}
+
+void LibraryController::loadAdminStats()
+{
+    m_api->get(QStringLiteral("/admin/stats"), [this](const ApiClient::Response &response) {
+        if (!response.ok()) {
+            m_adminStats.clear();
+            emit adminStatsChanged();
+            emit notify(response.error);
+            return;
+        }
+        m_adminStats = response.object.toVariantMap();
+        emit adminStatsChanged();
+    });
 }
 
 void LibraryController::loadLiked()
@@ -121,14 +238,66 @@ void LibraryController::loadLiked()
                });
 }
 
+namespace {
+constexpr int kCataloguePage = 200; // the most the server gives per page
+}
+
+void LibraryController::searchCatalogue(const QString &text)
+{
+    const QString trimmed = text.trimmed();
+    if (trimmed == m_catalogueQuery)
+        return;
+    m_catalogueQuery = trimmed;
+    loadCatalogue();
+}
+
+void LibraryController::loadMoreCatalogue()
+{
+    if (m_loadingMore || !catalogueHasMore())
+        return;
+    m_loadingMore = true;
+
+    const int offset = m_catalogue->count();
+    const QString text = m_catalogueQuery;
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("limit"), QString::number(kCataloguePage));
+    query.addQueryItem(QStringLiteral("offset"), QString::number(offset));
+    query.addQueryItem(QStringLiteral("sort"), QStringLiteral("recent"));
+    if (!text.isEmpty())
+        query.addQueryItem(QStringLiteral("q"), text);
+
+    m_api->get(QStringLiteral("/tracks"), query,
+               [this, offset, text](const ApiClient::Response &response) {
+                   // The list was reloaded (or searched) while this was on its way.
+                   if (text != m_catalogueQuery || offset != m_catalogue->count()) {
+                       m_loadingMore = false;
+                       return;
+                   }
+                   m_loadingMore = false;
+                   if (!response.ok()) {
+                       emit notify(response.error);
+                       return;
+                   }
+                   m_catalogue->append(
+                       parseTracks(response.object.value(QStringLiteral("items")).toArray()));
+                   m_trackCount = response.object.value(QStringLiteral("total")).toInt();
+                   emit statsChanged();
+               });
+}
+
 void LibraryController::loadCatalogue()
 {
     QUrlQuery query;
-    query.addQueryItem(QStringLiteral("limit"), QStringLiteral("200"));
+    query.addQueryItem(QStringLiteral("limit"), QString::number(kCataloguePage));
     query.addQueryItem(QStringLiteral("sort"), QStringLiteral("recent"));
+    const QString text = m_catalogueQuery;
+    if (!text.isEmpty())
+        query.addQueryItem(QStringLiteral("q"), text);
 
     m_api->get(QStringLiteral("/tracks"), query,
-               [this](const ApiClient::Response &response) {
+               [this, text](const ApiClient::Response &response) {
+                   if (text != m_catalogueQuery)
+                       return;
                    if (!response.ok()) {
                        emit notify(response.error);
                        return;
@@ -180,7 +349,7 @@ void LibraryController::setReaction(const QString &trackId, const QString &kind)
                    const bool liked = resulting == QLatin1String("like");
                    const bool disliked = resulting == QLatin1String("dislike");
 
-                   for (TrackListModel *model : {m_searchResults, m_liked, m_catalogue})
+                   for (TrackListModel *model : {m_searchResults, m_liked, m_catalogue, m_browse})
                        model->setReaction(trackId, liked, disliked);
 
                    if (!liked)
@@ -426,6 +595,7 @@ void LibraryController::deleteTracks(const QStringList &trackIds)
                         m_searchResults->removeId(id);
                         m_liked->removeId(id);
                         m_catalogue->removeId(id);
+                        m_browse->removeId(id);
                     }
                     if (trackIds.contains(m_detailId)) {
                         m_detailId.clear();
@@ -475,6 +645,298 @@ void LibraryController::uploadFiles(const QList<QUrl> &fileUrls)
 
     setUploading(true);
     uploadNext();
+}
+
+void LibraryController::setSaving(bool saving)
+{
+    if (m_saving == saving)
+        return;
+    m_saving = saving;
+    emit savingChanged();
+}
+
+void LibraryController::beginTrackEdit(const QString &trackId)
+{
+    if (trackId.isEmpty())
+        return;
+    m_api->get(QStringLiteral("/tracks/%1").arg(trackId),
+               [this, trackId](const ApiClient::Response &response) {
+                   if (!response.ok()) {
+                       emit notify(response.error);
+                       return;
+                   }
+                   const QJsonObject track = response.object;
+                   QStringList main;
+                   QStringList featured;
+                   for (const QJsonValue &value : track.value(QStringLiteral("artists")).toArray()) {
+                       const QJsonObject credit = value.toObject();
+                       const QString name = credit.value(QStringLiteral("name")).toString();
+                       const QString role = credit.value(QStringLiteral("role")).toString();
+                       if (role == QLatin1String("featured"))
+                           featured.append(name);
+                       else if (role == QLatin1String("main"))
+                           main.append(name);
+                   }
+                   QStringList genres;
+                   for (const QJsonValue &genre : track.value(QStringLiteral("genres")).toArray())
+                       genres.append(genre.toString());
+                   const QJsonObject album = track.value(QStringLiteral("album")).toObject();
+
+                   m_trackEdit = {
+                       {QStringLiteral("id"), trackId},
+                       {QStringLiteral("title"), track.value(QStringLiteral("title")).toString()},
+                       {QStringLiteral("artists"), main.join(QStringLiteral(", "))},
+                       {QStringLiteral("featured"), featured.join(QStringLiteral(", "))},
+                       {QStringLiteral("album"), album.value(QStringLiteral("title")).toString()},
+                       {QStringLiteral("year"), album.value(QStringLiteral("release_year")).toInt()},
+                       {QStringLiteral("trackNumber"),
+                        track.value(QStringLiteral("track_number")).toInt()},
+                       {QStringLiteral("genres"), genres.join(QStringLiteral(", "))},
+                       {QStringLiteral("explicit"), track.value(QStringLiteral("explicit")).toBool()},
+                   };
+                   emit trackEditChanged();
+                   emit trackEditReady();
+               });
+}
+
+void LibraryController::saveTrack(const QString &trackId, const QVariantMap &fields)
+{
+    if (trackId.isEmpty() || m_saving)
+        return;
+
+    // The form gives names separated by commas; the server takes lists.
+    auto names = [](const QVariant &value) {
+        QJsonArray out;
+        for (const QString &part : value.toString().split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+            const QString name = part.simplified();
+            if (!name.isEmpty())
+                out.append(name);
+        }
+        return out;
+    };
+
+    QJsonObject body;
+    body.insert(QStringLiteral("title"), fields.value(QStringLiteral("title")).toString().trimmed());
+    body.insert(QStringLiteral("artists"), names(fields.value(QStringLiteral("artists"))));
+    body.insert(QStringLiteral("featured_artists"), names(fields.value(QStringLiteral("featured"))));
+    body.insert(QStringLiteral("album"), fields.value(QStringLiteral("album")).toString().trimmed());
+    body.insert(QStringLiteral("genres"), names(fields.value(QStringLiteral("genres"))));
+    body.insert(QStringLiteral("explicit"), fields.value(QStringLiteral("explicit")).toBool());
+    const int year = fields.value(QStringLiteral("year")).toInt();
+    if (year > 0)
+        body.insert(QStringLiteral("release_year"), year);
+    const int number = fields.value(QStringLiteral("trackNumber")).toInt();
+    if (number >= 0)
+        body.insert(QStringLiteral("track_number"), number);
+
+    setSaving(true);
+    m_api->patch(QStringLiteral("/tracks/%1").arg(trackId), body,
+                 [this, trackId](const ApiClient::Response &response) {
+                     setSaving(false);
+                     if (!response.ok()) {
+                         emit notify(response.error);
+                         return;
+                     }
+                     const Track track = Track::fromJson(response.object);
+                     for (TrackListModel *model :
+                          {m_searchResults, m_liked, m_catalogue, m_browse})
+                         model->replaceTrack(track);
+                     if (trackId == m_detailId) {
+                         m_detail = track.toVariantMap();
+                         emit detailChanged();
+                     }
+                     emit notify(tr("Сохранено"));
+                     emit trackSaved(trackId);
+                 });
+}
+
+void LibraryController::loadAdminArtists(const QString &text)
+{
+    m_adminArtistsQuery = text.trimmed();
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("limit"), QString::number(kCataloguePage));
+    query.addQueryItem(QStringLiteral("sort"), QStringLiteral("name"));
+    if (!m_adminArtistsQuery.isEmpty())
+        query.addQueryItem(QStringLiteral("q"), m_adminArtistsQuery);
+
+    const QString asked = m_adminArtistsQuery;
+    m_api->get(QStringLiteral("/artists"), query,
+               [this, asked](const ApiClient::Response &response) {
+                   if (asked != m_adminArtistsQuery)
+                       return;
+                   if (!response.ok()) {
+                       emit notify(response.error);
+                       return;
+                   }
+                   QList<QJsonObject> items;
+                   for (const QJsonValue &value : response.object.value(QStringLiteral("items")).toArray())
+                       items.append(value.toObject());
+                   m_adminArtists->setArtists(items);
+                   m_adminArtistsTotal = response.object.value(QStringLiteral("total")).toInt();
+                   emit adminArtistsChanged();
+               });
+}
+
+void LibraryController::loadMoreAdminArtists()
+{
+    if (m_loadingMoreArtists || !adminArtistsHasMore())
+        return;
+    m_loadingMoreArtists = true;
+
+    const int offset = m_adminArtists->count();
+    const QString asked = m_adminArtistsQuery;
+    QUrlQuery query;
+    query.addQueryItem(QStringLiteral("limit"), QString::number(kCataloguePage));
+    query.addQueryItem(QStringLiteral("offset"), QString::number(offset));
+    query.addQueryItem(QStringLiteral("sort"), QStringLiteral("name"));
+    if (!asked.isEmpty())
+        query.addQueryItem(QStringLiteral("q"), asked);
+
+    m_api->get(QStringLiteral("/artists"), query,
+               [this, offset, asked](const ApiClient::Response &response) {
+                   m_loadingMoreArtists = false;
+                   if (asked != m_adminArtistsQuery || offset != m_adminArtists->count())
+                       return;
+                   if (!response.ok()) {
+                       emit notify(response.error);
+                       return;
+                   }
+                   QList<QJsonObject> items;
+                   for (const QJsonValue &value : response.object.value(QStringLiteral("items")).toArray())
+                       items.append(value.toObject());
+                   m_adminArtists->append(items);
+                   m_adminArtistsTotal = response.object.value(QStringLiteral("total")).toInt();
+                   emit adminArtistsChanged();
+               });
+}
+
+void LibraryController::applyArtistAnswer(bool ok, const QString &error, const QJsonObject &artist,
+                                          const QString &message)
+{
+    setSaving(false);
+    if (!ok) {
+        emit notify(error);
+        return;
+    }
+    m_adminArtists->update(artist);
+    // Search results that show this artist (with the old picture or name) follow.
+    const QString id = artist.value(QStringLiteral("id")).toString();
+    QVariantList artists = m_searchArtists;
+    bool changed = false;
+    for (QVariant &entry : artists) {
+        QVariantMap found = entry.toMap();
+        if (found.value(QStringLiteral("id")).toString() != id)
+            continue;
+        found.insert(QStringLiteral("name"), artist.value(QStringLiteral("name")).toString());
+        found.insert(QStringLiteral("imagePath"), artist.value(QStringLiteral("image_path")).toString());
+        entry = found;
+        changed = true;
+    }
+    if (changed) {
+        m_searchArtists = artists;
+        emit searchGroupsChanged();
+    }
+    emit notify(message);
+    emit artistSaved(id);
+}
+
+void LibraryController::saveArtist(const QString &artistId, const QVariantMap &fields)
+{
+    if (artistId.isEmpty() || m_saving)
+        return;
+    QJsonObject body;
+    body.insert(QStringLiteral("name"), fields.value(QStringLiteral("name")).toString().trimmed());
+    body.insert(QStringLiteral("country"), fields.value(QStringLiteral("country")).toString().trimmed());
+    body.insert(QStringLiteral("bio"), fields.value(QStringLiteral("bio")).toString());
+
+    setSaving(true);
+    m_api->patch(QStringLiteral("/artists/%1").arg(artistId), body,
+                 [this](const ApiClient::Response &response) {
+                     applyArtistAnswer(response.ok(), response.error, response.object, tr("Сохранено"));
+                 });
+}
+
+void LibraryController::setArtistImage(const QString &artistId, const QUrl &file)
+{
+    if (artistId.isEmpty() || m_saving)
+        return;
+
+    // Read through QFile so that a picture handed over by the system (a content:// address on
+    // Android) opens like any other.
+    const QString path = file.isLocalFile() ? file.toLocalFile() : file.toString();
+    QFile source(path);
+    if (!source.open(QIODevice::ReadOnly)) {
+        emit notify(tr("Не удалось открыть картинку"));
+        return;
+    }
+    QImage image = QImage::fromData(source.readAll());
+    if (image.isNull()) {
+        emit notify(tr("Это не картинка, или формат не поддерживается"));
+        return;
+    }
+
+    // A photo straight from a camera is many megabytes; a profile picture needs a fraction.
+    constexpr int kLongestSide = 800;
+    if (qMax(image.width(), image.height()) > kLongestSide)
+        image = image.scaled(kLongestSide, kLongestSide, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+
+    QByteArray bytes;
+    QBuffer buffer(&bytes);
+    buffer.open(QIODevice::WriteOnly);
+    const bool transparent = image.hasAlphaChannel();
+    image.save(&buffer, transparent ? "PNG" : "JPG", transparent ? -1 : 88);
+
+    setSaving(true);
+    m_api->uploadBytes(QStringLiteral("/artists/%1/image").arg(artistId), QStringLiteral("image"),
+                       transparent ? QStringLiteral("artist.png") : QStringLiteral("artist.jpg"), bytes,
+                       transparent ? QStringLiteral("image/png") : QStringLiteral("image/jpeg"),
+                       [this](const ApiClient::Response &response) {
+                           applyArtistAnswer(response.ok(), response.error, response.object,
+                                              tr("Картинка сохранена"));
+                       });
+}
+
+void LibraryController::removeArtistImage(const QString &artistId)
+{
+    if (artistId.isEmpty() || m_saving)
+        return;
+    setSaving(true);
+    m_api->del(QStringLiteral("/artists/%1/image").arg(artistId),
+               [this](const ApiClient::Response &response) {
+                   applyArtistAnswer(response.ok(), response.error, response.object, tr("Картинка убрана"));
+               });
+}
+
+void LibraryController::uploadFolder(const QUrl &folder)
+{
+    const QString root = folder.isLocalFile() ? folder.toLocalFile() : folder.toString();
+    if (root.isEmpty() || m_uploading)
+        return;
+
+    // The folder is on this computer, not on the server, so its files go up one by one like any
+    // others. (Asking the server to read the path only works when it runs on this very machine.)
+    static const QStringList filters{
+        QStringLiteral("*.mp3"),  QStringLiteral("*.flac"), QStringLiteral("*.m4a"),
+        QStringLiteral("*.ogg"),  QStringLiteral("*.opus"), QStringLiteral("*.wav"),
+        QStringLiteral("*.aac"),  QStringLiteral("*.wma"),  QStringLiteral("*.aiff"),
+        QStringLiteral("*.aif"),
+    };
+    QStringList paths;
+    QDirIterator it(root, filters, QDir::Files | QDir::Readable, QDirIterator::Subdirectories);
+    while (it.hasNext())
+        paths.append(it.next());
+
+    if (paths.isEmpty()) {
+        emit notify(tr("В этой папке нет аудиофайлов"));
+        return;
+    }
+    std::sort(paths.begin(), paths.end());
+
+    QList<QUrl> files;
+    files.reserve(paths.size());
+    for (const QString &path : std::as_const(paths))
+        files.append(QUrl::fromLocalFile(path));
+    uploadFiles(files);
 }
 
 void LibraryController::uploadNext()
@@ -557,7 +1019,7 @@ void LibraryController::finishUpload()
 
 void LibraryController::applyLyricsKind(const QString &trackId, const QString &kind)
 {
-    for (TrackListModel *model : {m_searchResults, m_liked, m_catalogue})
+    for (TrackListModel *model : {m_searchResults, m_liked, m_catalogue, m_browse})
         model->setLyricsKind(trackId, kind);
 }
 
@@ -566,6 +1028,23 @@ void LibraryController::clear()
     m_searchResults->clear();
     m_liked->clear();
     m_catalogue->clear();
+    m_browse->clear();
+    m_adminArtists->clear();
+    m_adminArtistsTotal = 0;
+    m_adminArtistsQuery.clear();
+    m_catalogueQuery.clear();
+    m_trackEdit.clear();
+    emit adminArtistsChanged();
+    m_browseKind.clear();
+    m_browseId.clear();
+    m_browseTitle.clear();
+    m_browseLoading = false;
+    m_searchArtists.clear();
+    m_searchAlbums.clear();
+    m_adminStats.clear();
+    emit searchGroupsChanged();
+    emit browseChanged();
+    emit adminStatsChanged();
     m_activeList = nullptr;
     m_activeRow = -1;
     m_importTimer.stop();

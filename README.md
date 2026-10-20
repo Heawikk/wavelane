@@ -139,13 +139,23 @@ python scripts/make_demo_catalogue.py --out ../demo_music
 **Only administrators** can add music (the first registered account is an
 administrator). Everyone else just listens.
 
-**A whole folder.** In the client: *Library → Import folder*. The server reads
-the tags, extracts the covers and analyses the audio in the background: a
-progress bar runs, the import can be stopped, and the client picks up an import
-that is already running after a restart. Folders may be nested, files are
-processed on several threads (the count is set by `WAVELANE_IMPORT_WORKERS`; by
-default it is chosen automatically, up to 4). One import runs at a time. The same
-through the API:
+Uploading lives in the **Admin menu** (shown to administrators only, after the
+Collection): *Admin menu → Upload*. The same menu has a *Dashboard* (how many
+tracks there are, how many have lyrics, how many of those are synced), the list
+of *All tracks* (with a search; the pencil next to a track edits its title,
+artists, album, year, genres and so on) and *Artists* (a list with a search; an
+artist's picture, name, country and description can be changed there).
+
+**A whole folder.** *Upload folder* picks a folder on the computer you are
+sitting at (subfolders included) and sends its audio files to the server one by
+one, so it works with a remote server too. The server reads the tags, extracts
+the covers and analyses the audio.
+
+**A folder on the server itself.** Through the API only: the server reads it in
+the background, the import can be stopped, and a client picks up an import that
+is already running. Folders may be nested, files are processed on several threads
+(the count is set by `WAVELANE_IMPORT_WORKERS`; by default it is chosen
+automatically, up to 4). One import runs at a time:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/v1/admin/imports   -H "Authorization: Bearer <access_token>" -H "Content-Type: application/json"   -d '{"path":"E:/Wavelane/demo_music"}'
@@ -155,8 +165,8 @@ curl http://127.0.0.1:8000/api/v1/admin/imports/<id> -H "Authorization: Bearer <
 The path is on **the machine where the server runs**. The source files are not
 modified: the server copies them into its own storage.
 
-**Individual files** — *Library → Upload files* (Ctrl+U); this works from another
-computer too.
+**Individual files** — *Admin menu → Upload files* (Ctrl+U); this works from
+another computer too.
 
 **Conflicts.** If a file is the same recording that is already in the library
 (same artist and title, length within 8 seconds) but the file itself is

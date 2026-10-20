@@ -17,11 +17,17 @@ Rectangle {
 
     color: Theme.panel
 
-    readonly property var items: [
-        { id: "search",     label: qsTr("Поиск"),      glyph: Theme.iSearch },
-        { id: "wave",       label: qsTr("Моя волна"),  glyph: Theme.iWave },
-        { id: "collection", label: qsTr("Коллекция"),  glyph: Theme.iLibrary }
-    ]
+    // The admin menu comes after the collection, for administrators only.
+    readonly property var items: {
+        const places = [
+            { id: "search",     label: qsTr("Поиск"),      glyph: Theme.iSearch },
+            { id: "wave",       label: qsTr("Моя волна"),  glyph: Theme.iWave },
+            { id: "collection", label: qsTr("Коллекция"),  glyph: Theme.iLibrary }
+        ]
+        if (auth.isAdmin)
+            places.push({ id: "admin", label: qsTr("Админ меню"), glyph: Theme.iCatalogue })
+        return places
+    }
 
     Rectangle {
         anchors.right: parent.right

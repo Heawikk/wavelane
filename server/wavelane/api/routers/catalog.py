@@ -6,7 +6,7 @@ import uuid
 from typing import Annotated, Literal
 
 import anyio
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import func, select
 
 from ...models import Album, Artist, Genre, Track, TrackArtist, TrackGenre
@@ -29,10 +29,14 @@ from ...services.catalog import (
     ready_tracks,
     search_albums,
     search_artists,
+    search_pattern,
     search_tracks,
     serialize_tracks,
+    track_matches,
     tracks_for_genre,
 )
+from ...services.editing import EditError, set_track_album, set_track_artists
+from ...services.storage import looks_like_image
 from ...services.removal import delete_tracks, unlink_audio
 from ...utils import normalize_name, slugify
 from ..deps import (
@@ -73,8 +77,15 @@ async def list_tracks(
     user: OptionalUser,
     sort: TrackSort = "popular",
     genre: Annotated[str | None, Query(description="Genre slug filter")] = None,
+    q: Annotated[
+        str | None, Query(max_length=200, description="Only tracks matching this text")
+    ] = None,
 ) -> Page[TrackOut]:
     query = ready_tracks()
+    if q:
+        pattern = search_pattern(q)
+        if pattern is not None:
+            query = query.where(track_matches(pattern))
     if genre:
         query = query.where(
             Track.genre_links.any(
@@ -128,6 +139,16 @@ async def update_track(
 
     if payload.genres is not None:
         await _replace_genres(db, track, payload.genres)
+
+    try:
+        if payload.artists is not None or payload.featured_artists is not None:
+            await set_track_artists(db, track, payload.artists, payload.featured_artists)
+        if payload.album is not None or payload.release_year is not None:
+            await set_track_album(db, track, payload.album, payload.release_year)
+    except EditError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
 
     await db.flush()
     items = await serialize_tracks(db, [track], user.id, include_features=True)
@@ -198,14 +219,22 @@ async def _delete(db, storage, track_ids: list[uuid.UUID]) -> DeleteResult:
 
 
 @router.get("/artists", response_model=Page[ArtistOut], summary="List artists")
-async def list_artists(db: DbSession, page: PageParams) -> Page[ArtistOut]:
-    total = int(await db.scalar(select(func.count()).select_from(Artist)) or 0)
-    rows = await db.scalars(
-        select(Artist)
-        .order_by(Artist.play_count.desc(), Artist.name)
-        .limit(page.limit)
-        .offset(page.offset)
+async def list_artists(
+    db: DbSession,
+    page: PageParams,
+    sort: Literal["popular", "name"] = "popular",
+    q: Annotated[str | None, Query(max_length=200, description="Only names containing this")] = None,
+) -> Page[ArtistOut]:
+    query = select(Artist)
+    if q:
+        pattern = search_pattern(q)
+        if pattern is not None:
+            query = query.where(Artist.normalized_name.like(pattern))
+    total = await count_query(db, query)
+    ordering = (
+        (Artist.normalized_name,) if sort == "name" else (Artist.play_count.desc(), Artist.name)
     )
+    rows = await db.scalars(query.order_by(*ordering).limit(page.limit).offset(page.offset))
     return Page(
         items=[ArtistOut.model_validate(a) for a in rows],
         total=total,
@@ -263,12 +292,77 @@ async def update_artist(
     if artist is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="artist not found")
     if payload.name:
-        artist.name = payload.name.strip()
-        artist.normalized_name = normalize_name(artist.name)
+        name = " ".join(payload.name.split())
+        normalized = normalize_name(name)
+        taken = await db.scalar(
+            select(Artist.id).where(Artist.normalized_name == normalized, Artist.id != artist.id)
+        )
+        if taken is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="another artist already has this name",
+            )
+        artist.name = name
+        artist.normalized_name = normalized
     if payload.bio is not None:
-        artist.bio = payload.bio
+        artist.bio = payload.bio.strip() or None
     if payload.country is not None:
-        artist.country = payload.country.upper()
+        artist.country = payload.country.upper() or None
+    await db.flush()
+    return ArtistOut.model_validate(artist)
+
+
+# A photo is shrunk by the client before it is sent; this is only the ceiling.
+MAX_ARTIST_IMAGE_BYTES = 1_500_000
+
+
+@router.post(
+    "/artists/{artist_id}/image",
+    response_model=ArtistOut,
+    summary="Set an artist's picture (administrator)",
+)
+async def set_artist_image(
+    artist_id: uuid.UUID,
+    db: DbSession,
+    admin: AdminUser,
+    storage: FileStorage,
+    image: UploadFile = File(..., description="PNG, JPEG or WebP"),
+) -> ArtistOut:
+    artist = await db.get(Artist, artist_id)
+    if artist is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="artist not found")
+
+    data = await image.read(MAX_ARTIST_IMAGE_BYTES + 1)
+    await image.close()
+    if len(data) > MAX_ARTIST_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="the picture is too large"
+        )
+    # What the upload claims to be is not enough: only real PNG, JPEG and WebP files are kept.
+    if not looks_like_image(data):
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="the picture must be a PNG, JPEG or WebP image",
+        )
+    artist.image_path = await anyio.to_thread.run_sync(
+        storage.save_cover, data, image.content_type
+    )
+    await db.flush()
+    return ArtistOut.model_validate(artist)
+
+
+@router.delete(
+    "/artists/{artist_id}/image",
+    response_model=ArtistOut,
+    summary="Remove an artist's picture (administrator)",
+)
+async def remove_artist_image(
+    artist_id: uuid.UUID, db: DbSession, admin: AdminUser
+) -> ArtistOut:
+    artist = await db.get(Artist, artist_id)
+    if artist is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="artist not found")
+    artist.image_path = None
     await db.flush()
     return ArtistOut.model_validate(artist)
 
@@ -370,9 +464,9 @@ async def search(
         query=q,
         tracks=await serialize_tracks(db, tracks, user.id if user else None),
         artists=[
-            ArtistBrief.model_validate(a) for a in await search_artists(db, q, limit=10)
+            ArtistBrief.model_validate(a) for a in await search_artists(db, q, limit=20)
         ],
         albums=[
-            AlbumBrief.model_validate(a) for a in await search_albums(db, q, limit=10)
+            AlbumBrief.model_validate(a) for a in await search_albums(db, q, limit=40)
         ],
     )

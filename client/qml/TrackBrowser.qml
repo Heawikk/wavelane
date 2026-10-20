@@ -16,6 +16,11 @@ RowLayout {
     property string emptyText: ""
     property bool detailOpen: true
     property string selectedId: ""
+    //! Shown above the rows (see TrackTable).
+    property Component topContent: null
+    property bool topHasContent: false
+
+    signal endReached()
 
     spacing: 0
 
@@ -37,13 +42,14 @@ RowLayout {
         const dependencies = (root.model ? root.model.revision : 0) + wave.history.revision
                              + wave.queue.revision + library.liked.revision
                              + library.catalogue.revision + library.searchResults.revision
+                             + library.browse.revision
         const playing = player.hasTrack ? player.currentTrack : null
 
         if (selectedId === "")
             return playing
 
         const models = [root.model, wave.history, wave.queue, library.catalogue,
-                        library.liked, library.searchResults]
+                        library.liked, library.searchResults, library.browse]
         for (let i = 0; i < models.length; ++i) {
             if (!models[i])
                 continue
@@ -69,6 +75,7 @@ RowLayout {
     }
 
     function focusTable() { table.forceActiveFocus() }
+    function toTop() { table.toTop() }
 
     TrackTable {
         id: table
@@ -79,7 +86,10 @@ RowLayout {
         context: root.context
         playable: root.playable
         emptyText: root.emptyText
+        topContent: root.topContent
+        topHasContent: root.topHasContent
         selectedId: root.selectedId
+        onEndReached: root.endReached()
         onTrackSelected: function(trackId) { root.selectedId = trackId }
         onDeleteRequested: function(trackId) {
             const row = root.model ? root.model.indexOfId(trackId) : -1
@@ -104,7 +114,10 @@ RowLayout {
         onDeleteRequested: root.askDelete(
             root.detailTrack ? root.detailTrack.id : "",
             root.detailTrack ? root.detailTrack.title : "")
+        onEditRequested: editDialog.openFor(root.detailTrack ? root.detailTrack.id : "")
     }
+
+    TrackEditDialog { id: editDialog }
 
     ConfirmDialog {
         id: confirmDelete

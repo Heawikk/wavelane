@@ -88,6 +88,9 @@ public:
 
     //! Multipart upload of local files to /upload.
     void uploadFiles(const QStringList &localPaths, Callback callback);
+    //! Multipart upload of one in-memory file (a picture) as form field `field` of `path`.
+    void uploadBytes(const QString &path, const QString &field, const QString &fileName,
+                     const QByteArray &bytes, const QString &mimeType, Callback callback);
 
 signals:
     void baseUrlChanged();
@@ -111,6 +114,7 @@ private:
     };
 
     void send(Request request);
+    void sendMultipart(const QString &path, QHttpMultiPart *multiPart, Callback callback);
     void finish(QNetworkReply *reply, Request request);
     void beginRefresh();
     void failWaiting(const QString &reason, int status);

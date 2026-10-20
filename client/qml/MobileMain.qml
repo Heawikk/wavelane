@@ -27,15 +27,22 @@ ApplicationWindow {
 
     onLyricsOpenChanged: lyrics.active = lyricsOpen && auth.signedIn
 
-    readonly property string pageNumber: page === "search" ? "01" : page === "wave" ? "02" : "03"
+    readonly property string pageNumber: page === "search" ? "01" : page === "wave" ? "02"
+                                         : page === "collection" ? "03" : "04"
     readonly property string pageTitle: page === "search" ? qsTr("Поиск")
                                         : page === "wave" ? qsTr("Моя волна")
-                                        : qsTr("Коллекция")
+                                        : page === "collection" ? qsTr("Коллекция")
+                                        : qsTr("Админ меню")
+    //! The pages in the order of the tabs; the last is for administrators only.
+    readonly property var pageOrder: auth.isAdmin ? ["search", "wave", "collection", "admin"]
+                                                  : ["search", "wave", "collection"]
 
     function showPage(name) {
         window.page = name
         if (name === "collection")
             collectionPage.refresh()
+        else if (name === "admin")
+            adminPage.refresh()
     }
 
     Connections {
@@ -66,6 +73,11 @@ ApplicationWindow {
         target: auth
         // The app was opened with the server away; now it has answered.
         function onSessionResumed() { window.loadEverything() }
+        // The admin menu is for administrators: leave it if that stops being true.
+        function onUserChanged() {
+            if (!auth.isAdmin && window.page === "admin")
+                window.page = "wave"
+        }
         function onSignedInChanged() {
             if (auth.signedIn) {
                 // the keyboard from the sign-in form should not stay up
@@ -86,6 +98,10 @@ ApplicationWindow {
             close.accepted = false
         } else if (nowPlayingOpen) {
             nowPlayingOpen = false
+            close.accepted = false
+        } else if (page === "search" && library.browseKind !== "") {
+            // an artist or an album is open: Back returns to the results
+            library.closeBrowse()
             close.accepted = false
         } else if (page !== "wave" && auth.signedIn) {
             page = "wave"
@@ -199,11 +215,13 @@ ApplicationWindow {
 
             StackLayout {
                 anchors.fill: parent
-                currentIndex: window.page === "search" ? 0 : window.page === "wave" ? 1 : 2
+                currentIndex: window.page === "search" ? 0 : window.page === "wave" ? 1
+                              : window.page === "collection" ? 2 : 3
 
                 MobileSearchPage { id: searchPage }
                 WavePage { id: wavePage }
                 MobileCollectionPage { id: collectionPage }
+                MobileAdminPage { id: adminPage }
             }
 
             OfflineBadge {
@@ -230,7 +248,7 @@ ApplicationWindow {
                         travelX = 0
                         return
                     }
-                    const order = ["search", "wave", "collection"]
+                    const order = window.pageOrder
                     const at = order.indexOf(window.page)
                     if (travelX < -80 && at < order.length - 1)
                         window.showPage(order[at + 1])

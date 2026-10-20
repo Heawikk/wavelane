@@ -3,25 +3,22 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Wavelane
 
-/*! What is yours: liked tracks, the whole catalogue, what the wave played, the taste profile. */
+/*! What is yours: liked tracks, what the wave played, the taste profile. */
 Item {
     id: root
 
     property int tab: 0
 
     readonly property var tabs: [
-        { value: "0", label: qsTr("Мои") },
-        { value: "1", label: qsTr("Каталог") },
-        { value: "2", label: qsTr("История") },
-        { value: "3", label: qsTr("Вкус") }
+        { value: "0", label: qsTr("Избранное") },
+        { value: "1", label: qsTr("История") },
+        { value: "2", label: qsTr("Профиль вкуса") }
     ]
 
     function refresh() {
         if (tab === 0)
             library.loadLiked()
-        else if (tab === 1)
-            library.loadCatalogue()
-        else if (tab === 3)
+        else if (tab === 2)
             wave.refreshProfile()
     }
 
@@ -59,23 +56,20 @@ Item {
 
             MobileTrackList {
                 anchors.fill: parent
-                visible: root.tab < 3
+                visible: root.tab < 2
 
-                model: root.tab === 0 ? library.liked
-                       : root.tab === 1 ? library.catalogue
-                       : wave.history
-                context: root.tab === 0 ? "liked" : "catalogue"
+                model: root.tab === 0 ? library.liked : wave.history
+                context: "liked"
                 // History rows carry stream links minted when the track was served,
                 // which expire, so they are for reading, not replaying.
-                playable: root.tab < 2
+                playable: root.tab === 0
                 emptyText: root.tab === 0 ? qsTr("Пока ничего не нравится. Ставьте сердечко, и треки появятся здесь.")
-                           : root.tab === 1 ? qsTr("Каталог пуст.")
                            : qsTr("Пока пусто. Включите волну, и здесь появится всё, что в ней прозвучало.")
             }
 
             Flickable {
                 anchors.fill: parent
-                visible: root.tab === 3
+                visible: root.tab === 2
                 contentWidth: width
                 contentHeight: profileColumn.implicitHeight + 32
                 boundsBehavior: Flickable.StopAtBounds

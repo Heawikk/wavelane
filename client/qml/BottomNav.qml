@@ -2,7 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import Wavelane
 
-/*! The three pages, as tabs along the bottom edge. */
+/*! The pages, as tabs along the bottom edge (a fourth one for administrators). */
 Rectangle {
     id: root
 
@@ -23,11 +23,16 @@ Rectangle {
         spacing: 0
 
         Repeater {
-            model: [
-                { name: "search",     glyph: Theme.iSearch,  label: qsTr("Поиск") },
-                { name: "wave",       glyph: Theme.iWave,    label: qsTr("Моя волна") },
-                { name: "collection", glyph: Theme.iLibrary, label: qsTr("Коллекция") }
-            ]
+            model: {
+                const tabs = [
+                    { name: "search",     glyph: Theme.iSearch,  label: qsTr("Поиск") },
+                    { name: "wave",       glyph: Theme.iWave,    label: qsTr("Моя волна") },
+                    { name: "collection", glyph: Theme.iLibrary, label: qsTr("Коллекция") }
+                ]
+                if (auth.isAdmin)
+                    tabs.push({ name: "admin", glyph: Theme.iCatalogue, label: qsTr("Админ") })
+                return tabs
+            }
 
             delegate: Item {
                 id: tab

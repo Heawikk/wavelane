@@ -67,6 +67,8 @@ public:
     //! Update which kind of lyrics one row has, after an administrator edited them.
     void setLyricsKind(const QString &trackId, const QString &kind);
     void removeId(const QString &trackId);
+    //! Take in the new state of a track (after it was edited); rows that show it follow.
+    void replaceTrack(const Track &track);
 
     Q_INVOKABLE QVariantMap get(int row) const;
 

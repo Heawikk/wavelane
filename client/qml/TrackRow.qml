@@ -30,6 +30,8 @@ Rectangle {
     property bool selected: false
     property bool playingNow: false
     property bool showReason: false
+    //! Rows of a list that cannot be replayed (the history) have no play button.
+    property bool playable: true
 
     property int gap: 12
     property int colIndex: 40
@@ -42,6 +44,8 @@ Rectangle {
     signal clicked()
     signal activated()
     signal likeToggled()
+    //! The play / pause button at the left of the row.
+    signal playToggled()
 
     readonly property string genreText: genres && genres.length > 0
                                         ? genres.slice(0, 2).join(", ") : ""
@@ -74,22 +78,33 @@ Rectangle {
         anchors.fill: parent
         spacing: root.gap
 
+        // The number, which turns into a play button under the pointer; the track that is
+        // playing keeps a button of its own (pause while it plays, play while it is paused).
         Item {
+            id: lead
+
+            readonly property bool showButton: root.playingNow || (root.playable && hover.hovered)
+
             Layout.preferredWidth: root.colIndex
             Layout.fillHeight: true
 
-            Icon {
-                anchors.centerIn: parent
-                visible: root.playingNow
-                glyph: player.playing ? Theme.iVolume : Theme.iPause
-                font.pixelSize: 12
-                color: Theme.accentText
-            }
             Mono {
                 anchors.centerIn: parent
-                visible: !root.playingNow
+                visible: !lead.showButton
                 text: root.rowNumber > 0 ? root.rowNumber : ""
                 color: Theme.faint
+            }
+
+            IconButton {
+                anchors.centerIn: parent
+                visible: lead.showButton
+                size: 26
+                glyphSize: 14
+                glyph: root.playingNow && player.playing ? Theme.iPause : Theme.iPlay
+                active: root.playingNow
+                activeColor: Theme.accentText
+                tooltip: root.playingNow && player.playing ? qsTr("Пауза") : qsTr("Воспроизвести")
+                onClicked: root.playToggled()
             }
         }
 
