@@ -143,6 +143,7 @@ void UpdateController::handleRelease(QNetworkReply *reply)
         return;
     }
     if (status == 0) {
+        qCWarning(lcUpdate) << "could not reach GitHub:" << reply->error() << reply->errorString();
         setState(QStringLiteral("error"), tr("Нет соединения с GitHub"));
         return;
     }

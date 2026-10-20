@@ -178,6 +178,17 @@ if(ANDROID)
         "${CMAKE_CURRENT_SOURCE_DIR}/android")
     set_property(TARGET wavelane PROPERTY QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}")
     set_property(TARGET wavelane PROPERTY QT_ANDROID_VERSION_CODE ${WAVELANE_ANDROID_VERSION_CODE})
+    # Qt has no TLS of its own on Android: without OpenSSL next to the app every https:// request
+    # (the update check, a server behind HTTPS) fails with "TLS initialization failed". The two
+    # libraries are the prebuilt OpenSSL 3 from https://github.com/KDAB/android_openssl (ssl_3/arm64-v8a).
+    set(WAVELANE_OPENSSL_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../tools/android/openssl/arm64-v8a"
+        CACHE PATH "Folder with libssl_3.so and libcrypto_3.so for Android")
+    if(EXISTS "${WAVELANE_OPENSSL_DIR}/libssl_3.so")
+        set_property(TARGET wavelane PROPERTY QT_ANDROID_EXTRA_LIBS
+            "${WAVELANE_OPENSSL_DIR}/libcrypto_3.so" "${WAVELANE_OPENSSL_DIR}/libssl_3.so")
+    else()
+        message(WARNING "No OpenSSL for Android in ${WAVELANE_OPENSSL_DIR}: https will not work in the app")
+    endif()
     set_property(TARGET wavelane PROPERTY QT_ANDROID_MIN_SDK_VERSION 28)
     set_property(TARGET wavelane PROPERTY QT_ANDROID_TARGET_SDK_VERSION 34)
 endif()
