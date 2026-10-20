@@ -44,7 +44,7 @@ call "%BUILD_TOOLS%\apksigner.bat" sign --ks "%TOOLS%\android\wavelane.keystore"
 if errorlevel 1 exit /b 1
 
 REM The daemon would keep a pipe open and hold up whatever started this script.
-if exist "%BUILD_DIR%ndroid-build\gradlew.bat" call "%BUILD_DIR%ndroid-build\gradlew.bat" --stop >nul 2>&1
+if exist "%BUILD_DIR%\android-build\gradlew.bat" call "%BUILD_DIR%\android-build\gradlew.bat" --stop >nul 2>&1
 
 echo.
 echo Built: %OUT%
