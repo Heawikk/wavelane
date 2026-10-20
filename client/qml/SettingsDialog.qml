@@ -287,6 +287,30 @@ Popup {
                     lineHeight: 1.2
                 }
             }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                Layout.topMargin: 12
+                color: Theme.border
+            }
+
+            // --- About ---
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.margins: 18
+
+                Mono {
+                    text: qsTr("Версия")
+                    color: Theme.text
+                    font.weight: Font.DemiBold
+                }
+                Item { Layout.fillWidth: true }
+                Mono {
+                    text: appVersion
+                    color: Theme.muted
+                }
+            }
             }
         }
     }

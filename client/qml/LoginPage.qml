@@ -63,6 +63,15 @@ Item {
         color: Theme.bg
     }
 
+    Mono {
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 12
+        text: "v" + appVersion
+        font.pixelSize: 10
+        color: Theme.faint
+    }
+
     Rectangle {
         anchors.centerIn: parent
         width: Math.min(380, root.width - 32)

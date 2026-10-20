@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
 
     QGuiApplication::setApplicationName(QStringLiteral("Wavelane"));
     QGuiApplication::setOrganizationName(QStringLiteral("Wavelane"));
-    QGuiApplication::setApplicationVersion(QStringLiteral("0.1.0"));
+    QGuiApplication::setApplicationVersion(QStringLiteral(WAVELANE_VERSION));
 
     // The design uses a monospace for its labels and, where the system has no Segoe
     // icons, an icon font; carrying both makes it look the same on every platform.
@@ -179,6 +179,7 @@ int main(int argc, char *argv[])
 
     QQmlApplicationEngine engine;
     QQmlContext *context = engine.rootContext();
+    context->setContextProperty(QStringLiteral("appVersion"), QGuiApplication::applicationVersion());
     context->setContextProperty(QStringLiteral("app"), &settings);
     context->setContextProperty(QStringLiteral("api"), &api);
     context->setContextProperty(QStringLiteral("auth"), &auth);
