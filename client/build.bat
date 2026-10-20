@@ -13,7 +13,7 @@ if errorlevel 1 (
 set QT_DIR=E:\Wavelane\tools\Qt\6.8.3\msvc2022_64
 set CMAKE=E:\Wavelane\.venv\Scripts\cmake.exe
 set NINJA=E:\Wavelane\.venv\Scripts\ninja.exe
-set BUILD_DIR=E:\Wavelane\client\build
+if not defined BUILD_DIR set BUILD_DIR=E:\Wavelane\client\build
 set BUILD_TYPE=%1
 if "%BUILD_TYPE%"=="" set BUILD_TYPE=Release
 

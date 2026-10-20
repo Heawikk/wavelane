@@ -43,6 +43,9 @@ call "%BUILD_TOOLS%\apksigner.bat" sign --ks "%TOOLS%\android\wavelane.keystore"
   --ks-pass pass:android --key-pass pass:android --out "%OUT%" "%BUILD_DIR%\aligned.apk"
 if errorlevel 1 exit /b 1
 
+REM The daemon would keep a pipe open and hold up whatever started this script.
+if exist "%BUILD_DIR%ndroid-build\gradlew.bat" call "%BUILD_DIR%ndroid-build\gradlew.bat" --stop >nul 2>&1
+
 echo.
 echo Built: %OUT%
 if /i "%1"=="install" "%ANDROID_SDK_ROOT%\platform-tools\adb.exe" install -r "%OUT%"

@@ -295,20 +295,67 @@ Popup {
                 color: Theme.border
             }
 
-            // --- About ---
-            RowLayout {
+            // --- Version and updates ---
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.margins: 18
+                spacing: 12
 
-                Mono {
-                    text: qsTr("Версия")
-                    color: Theme.text
-                    font.weight: Font.DemiBold
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Mono {
+                        text: qsTr("Версия")
+                        color: Theme.text
+                        font.weight: Font.DemiBold
+                    }
+                    Item { Layout.fillWidth: true }
+                    Mono {
+                        text: appVersion
+                        color: Theme.muted
+                    }
                 }
-                Item { Layout.fillWidth: true }
-                Mono {
-                    text: appVersion
-                    color: Theme.muted
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+
+                    Text {
+                        id: statusText
+                        Layout.fillWidth: true
+                        visible: text !== ""
+                        text: updates.state === "current" ? qsTr("Актуальная версия")
+                              : updates.state === "available" ? (updates.message !== "" ? updates.message
+                                                                 : qsTr("Доступна версия %1").arg(updates.latestVersion))
+                              : updates.state === "downloading" ? qsTr("Загрузка… %1%").arg(Math.round(updates.progress * 100))
+                              : updates.state === "installing" ? qsTr("Устанавливаю, приложение перезапустится…")
+                              : updates.state === "error" ? updates.message
+                              : ""
+                        color: updates.state === "current" ? Theme.positive
+                               : updates.state === "error" ? Theme.negative
+                               : Theme.muted
+                        font.family: Theme.sans
+                        font.pixelSize: Theme.fontSmall
+                        wrapMode: Text.WordWrap
+                    }
+                    Item {
+                        Layout.fillWidth: true
+                        visible: !statusText.visible
+                    }
+
+                    FlatButton {
+                        visible: updates.state === "available"
+                        primary: true
+                        text: qsTr("Обновить")
+                        onClicked: updates.install()
+                    }
+                    FlatButton {
+                        visible: updates.state !== "available"
+                        text: updates.state === "checking" ? qsTr("Проверка…") : qsTr("Проверить обновление")
+                        enabledWhen: updates.state !== "checking" && updates.state !== "downloading"
+                                     && updates.state !== "installing"
+                        onClicked: updates.check()
+                    }
                 }
             }
             }

@@ -8,6 +8,7 @@
 #include "MediaSession.h"
 #include "Player.h"
 #include "Settings.h"
+#include "UpdateController.h"
 #include "WaveController.h"
 
 #include <QCommandLineParser>
@@ -142,6 +143,7 @@ int main(int argc, char *argv[])
     ApiClient api(&settings);
     Player player(&api, &settings);
     AuthController auth(&api, &settings);
+    UpdateController updates;
     WaveController wave(&api, &player);
     LibraryController library(&api, &player);
     LyricsController lyrics(&api, &player);
@@ -183,6 +185,7 @@ int main(int argc, char *argv[])
     context->setContextProperty(QStringLiteral("app"), &settings);
     context->setContextProperty(QStringLiteral("api"), &api);
     context->setContextProperty(QStringLiteral("auth"), &auth);
+    context->setContextProperty(QStringLiteral("updates"), &updates);
     context->setContextProperty(QStringLiteral("player"), &player);
     context->setContextProperty(QStringLiteral("wave"), &wave);
     context->setContextProperty(QStringLiteral("library"), &library);

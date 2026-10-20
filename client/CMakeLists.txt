@@ -30,6 +30,7 @@ qt_add_executable(wavelane
     src/Settings.h           src/Settings.cpp
     src/ApiClient.h          src/ApiClient.cpp
     src/AuthController.h     src/AuthController.cpp
+    src/UpdateController.h   src/UpdateController.cpp
     src/Track.h              src/Track.cpp
     src/TrackListModel.h     src/TrackListModel.cpp
     src/AudioTap.h           src/AudioTap.cpp
@@ -146,7 +147,11 @@ endif()
 
 target_include_directories(wavelane PRIVATE src)
 
-target_compile_definitions(wavelane PRIVATE WAVELANE_VERSION="${PROJECT_VERSION}")
+# Where updates are looked for: the latest release of this GitHub repository.
+set(WAVELANE_UPDATE_REPO "Heawikk/wavelane" CACHE STRING "GitHub repository (owner/name) that publishes the releases")
+target_compile_definitions(wavelane PRIVATE
+    WAVELANE_VERSION="${PROJECT_VERSION}"
+    WAVELANE_UPDATE_REPO="${WAVELANE_UPDATE_REPO}")
 
 target_link_libraries(wavelane PRIVATE
     Qt6::Core
@@ -163,13 +168,16 @@ if(WIN32)
 endif()
 
 if(ANDROID)
+    # Must grow with every release, or the system refuses to install it over the old one.
+    math(EXPR WAVELANE_ANDROID_VERSION_CODE
+        "${PROJECT_VERSION_MAJOR} * 10000 + ${PROJECT_VERSION_MINOR} * 100 + ${PROJECT_VERSION_PATCH}")
     # The event loop of the main thread is replaced (see main.cpp), which needs a private header.
     target_link_libraries(wavelane PRIVATE Qt6::GuiPrivate)
     # The manifest (permissions, cleartext http, portrait) and the launcher icons.
     set_property(TARGET wavelane PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
         "${CMAKE_CURRENT_SOURCE_DIR}/android")
     set_property(TARGET wavelane PROPERTY QT_ANDROID_VERSION_NAME "${PROJECT_VERSION}")
-    set_property(TARGET wavelane PROPERTY QT_ANDROID_VERSION_CODE 1)
+    set_property(TARGET wavelane PROPERTY QT_ANDROID_VERSION_CODE ${WAVELANE_ANDROID_VERSION_CODE})
     set_property(TARGET wavelane PROPERTY QT_ANDROID_MIN_SDK_VERSION 28)
     set_property(TARGET wavelane PROPERTY QT_ANDROID_TARGET_SDK_VERSION 34)
 endif()
