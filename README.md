@@ -144,7 +144,11 @@ Collection): *Admin menu → Upload*. The same menu has a *Dashboard* (how many
 tracks there are, how many have lyrics, how many of those are synced), the list
 of *All tracks* (with a search; the pencil next to a track edits its title,
 artists, album, year, genres and so on) and *Artists* (a list with a search; an
-artist's picture, name, country and description can be changed there).
+artist's picture, name, country and description can be changed there). *Admins*
+lists the administrators and, for each of them and for all together, how many
+tracks they added and deleted, how many lyrics they added and how many they
+synced. Tracks are credited to whoever uploaded them; deletions and lyrics are
+counted from the moment the server is updated.
 
 **A whole folder.** *Upload folder* picks a folder on the computer you are
 sitting at (subfolders included) and sends its audio files to the server one by

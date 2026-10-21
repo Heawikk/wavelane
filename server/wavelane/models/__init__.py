@@ -1,5 +1,6 @@
 """SQLAlchemy models. Importing this package registers every table on Base."""
 
+from .admin import AdminEvent
 from .base import Base, JsonType, TimestampMixin
 from .catalog import (
     Album,
@@ -33,6 +34,7 @@ from .user import AuthSession, User
 from .wave import TasteProfile, WaveQueueItem, WaveSession, WaveSettings
 
 __all__ = [
+    "AdminEvent",
     "Album",
     "AlbumType",
     "AnalysisSource",

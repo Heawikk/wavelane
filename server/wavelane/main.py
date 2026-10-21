@@ -81,6 +81,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
         users = await session.scalar(select(func.count()).select_from(User))
         tracks = await session.scalar(select(func.count()).select_from(Track))
+
+        from .services.admin_log import backfill_uploads
+
+        credited = await backfill_uploads(session)
+        await session.commit()
+        if credited:
+            logger.info("credited %s existing track(s) to the administrators who uploaded them", credited)
     logger.info(
         "Wavelane %s ready — %s user(s), %s track(s), storage at %s",
         __version__,

@@ -19,7 +19,8 @@ Item {
         { value: "0", label: qsTr("Dashboard") },
         { value: "1", label: qsTr("Все треки") },
         { value: "2", label: qsTr("Исполнители") },
-        { value: "3", label: qsTr("Загрузка") }
+        { value: "3", label: qsTr("Загрузка") },
+        { value: "4", label: qsTr("Админы") }
     ]
 
     function openUpload() {
@@ -34,6 +35,8 @@ Item {
             library.loadCatalogue()
         else if (tab === 2)
             artists.refresh()
+        else if (tab === 4)
+            team.refresh()
     }
 
     onTabChanged: refresh()
@@ -117,6 +120,12 @@ Item {
                 anchors.fill: parent
                 visible: root.tab === 3
                 onShowConflicts: root.showConflicts()
+            }
+
+            AdminTeam {
+                id: team
+                anchors.fill: parent
+                visible: root.tab === 4
             }
         }
     }

@@ -13,7 +13,8 @@ Item {
         { value: "0", label: qsTr("Dashboard") },
         { value: "1", label: qsTr("Треки") },
         { value: "2", label: qsTr("Артисты") },
-        { value: "3", label: qsTr("Загрузка") }
+        { value: "3", label: qsTr("Загрузка") },
+        { value: "4", label: qsTr("Админы") }
     ]
 
     function refresh() {
@@ -23,6 +24,8 @@ Item {
             library.loadCatalogue()
         else if (tab === 2)
             artists.refresh()
+        else if (tab === 4)
+            team.refresh()
     }
 
     onTabChanged: refresh()
@@ -100,6 +103,13 @@ Item {
             AdminUpload {
                 anchors.fill: parent
                 visible: root.tab === 3
+                compact: true
+            }
+
+            AdminTeam {
+                id: team
+                anchors.fill: parent
+                visible: root.tab === 4
                 compact: true
             }
         }

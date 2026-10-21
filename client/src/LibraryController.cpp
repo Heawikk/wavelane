@@ -222,6 +222,20 @@ void LibraryController::loadAdminStats()
     });
 }
 
+void LibraryController::loadAdminTeam()
+{
+    m_api->get(QStringLiteral("/admin/admins"), [this](const ApiClient::Response &response) {
+        if (!response.ok()) {
+            m_adminTeam.clear();
+            emit adminTeamChanged();
+            emit notify(response.error);
+            return;
+        }
+        m_adminTeam = response.object.toVariantMap();
+        emit adminTeamChanged();
+    });
+}
+
 void LibraryController::loadLiked()
 {
     QUrlQuery query;
@@ -1042,9 +1056,11 @@ void LibraryController::clear()
     m_searchArtists.clear();
     m_searchAlbums.clear();
     m_adminStats.clear();
+    m_adminTeam.clear();
     emit searchGroupsChanged();
     emit browseChanged();
     emit adminStatsChanged();
+    emit adminTeamChanged();
     m_activeList = nullptr;
     m_activeRow = -1;
     m_importTimer.stop();

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Wavelane VERSION 1.0.2 LANGUAGES CXX)
+project(Wavelane VERSION 1.0.3 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -99,6 +99,7 @@ qt_add_qml_module(wavelane
         qml/MobileAdminPage.qml
         qml/AdminPage.qml
         qml/AdminDashboard.qml
+        qml/AdminTeam.qml
         qml/AdminUpload.qml
         qml/ResultShelf.qml
         qml/ArtistAvatar.qml

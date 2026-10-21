@@ -37,6 +37,7 @@ class LibraryController : public QObject
     Q_PROPERTY(bool browseLoading READ browseLoading NOTIFY browseChanged)
     //! Totals for the administrator's dashboard; empty until loaded.
     Q_PROPERTY(QVariantMap adminStats READ adminStats NOTIFY adminStatsChanged)
+    Q_PROPERTY(QVariantMap adminTeam READ adminTeam NOTIFY adminTeamChanged)
     //! More of the catalogue exists on the server than is loaded.
     Q_PROPERTY(bool catalogueHasMore READ catalogueHasMore NOTIFY statsChanged)
     //! The administrator's list of artists, and how many the server has (for the search typed).
@@ -75,6 +76,7 @@ public:
     QString browseTitle() const { return m_browseTitle; }
     bool browseLoading() const { return m_browseLoading; }
     QVariantMap adminStats() const { return m_adminStats; }
+    QVariantMap adminTeam() const { return m_adminTeam; }
     bool catalogueHasMore() const { return m_catalogue->count() < m_trackCount; }
     ArtistListModel *adminArtists() const { return m_adminArtists; }
     int adminArtistsTotal() const { return m_adminArtistsTotal; }
@@ -119,6 +121,7 @@ public:
     Q_INVOKABLE void openAlbum(const QString &albumId, const QString &title);
     Q_INVOKABLE void closeBrowse();
     Q_INVOKABLE void loadAdminStats();
+    Q_INVOKABLE void loadAdminTeam();
     Q_INVOKABLE void loadStats();
 
     //! Toggle like / dislike on any track, from any list.
@@ -169,6 +172,7 @@ signals:
     void searchGroupsChanged();
     void browseChanged();
     void adminStatsChanged();
+    void adminTeamChanged();
     void adminArtistsChanged();
     void trackEditChanged();
     void savingChanged();
@@ -217,6 +221,7 @@ private:
     QString m_browseId;
     bool m_browseLoading = false;
     QVariantMap m_adminStats;
+    QVariantMap m_adminTeam;
     bool m_loadingMore = false;
     QString m_catalogueQuery;
     ArtistListModel *m_adminArtists = nullptr;

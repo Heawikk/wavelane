@@ -24,6 +24,7 @@ from ...schemas.catalog import (
 from ...schemas.common import Page
 from ...schemas.library import SearchResults
 from ...schemas.upload import DeleteResult, DeleteTracksRequest
+from ...services.admin_log import TRACK_DELETED, record, record_lyrics_change
 from ...services.catalog import (
     count_query,
     ready_tracks,
@@ -132,10 +133,13 @@ async def update_track(
     if payload.title:
         track.title = payload.title.strip()
         track.normalized_title = normalize_name(track.title)
+    lyrics_before = track.lyrics
     for field in ("track_number", "disc_number", "explicit", "lyrics", "isrc"):
         value = getattr(payload, field)
         if value is not None:
             setattr(track, field, value)
+    if user.is_admin:
+        record_lyrics_change(db, user.id, lyrics_before, track.lyrics)
 
     if payload.genres is not None:
         await _replace_genres(db, track, payload.genres)
@@ -182,7 +186,7 @@ async def _replace_genres(db, track: Track, genres: list[str]) -> None:
 async def bulk_delete_tracks(
     payload: DeleteTracksRequest, db: DbSession, admin: AdminUser, storage: FileStorage
 ) -> DeleteResult:
-    return await _delete(db, storage, payload.track_ids)
+    return await _delete(db, storage, payload.track_ids, admin)
 
 
 @router.delete(
@@ -193,14 +197,15 @@ async def bulk_delete_tracks(
 async def delete_track(
     track_id: uuid.UUID, db: DbSession, admin: AdminUser, storage: FileStorage
 ) -> DeleteResult:
-    result = await _delete(db, storage, [track_id])
+    result = await _delete(db, storage, [track_id], admin)
     if result.deleted == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="track not found")
     return result
 
 
-async def _delete(db, storage, track_ids: list[uuid.UUID]) -> DeleteResult:
+async def _delete(db, storage, track_ids: list[uuid.UUID], admin) -> DeleteResult:
     stats = await delete_tracks(db, track_ids)
+    record(db, admin.id, TRACK_DELETED, stats.deleted)
     # Commit before touching the disk: if the transaction failed, rows must not
     # be left pointing at files that are already gone.
     await db.commit()

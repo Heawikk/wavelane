@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Response, status
 
 from ...models import Track
 from ...schemas.lyrics import LyricLineOut, LyricsIn, LyricsOut
+from ...services.admin_log import record_lyrics_change
 from ...services.lyrics import LyricsError, parse_lyrics, validate_text
 from ..deps import AdminUser, CurrentUser, DbSession
 
@@ -49,12 +50,14 @@ async def put_lyrics(
     track_id: uuid.UUID, payload: LyricsIn, db: DbSession, admin: AdminUser
 ) -> LyricsOut:
     track = await _track(db, track_id)
+    before = track.lyrics
     try:
         track.lyrics = validate_text(payload.text)
     except LyricsError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)
         ) from exc
+    record_lyrics_change(db, admin.id, before, track.lyrics)
     await db.flush()
     return _out(track, with_text=True)
 

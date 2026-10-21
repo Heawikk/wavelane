@@ -42,6 +42,7 @@ from ..models import (
 )
 from ..utils import normalize_name, now_utc, slugify
 from ..wave.features import canonical_genre, normalize_tempo
+from .admin_log import TRACK_ADDED, record
 from .audio_analysis import AudioAnalyzer, get_analyzer
 from .storage import Storage, StoredFile, get_storage
 
@@ -720,6 +721,7 @@ class IngestService:
             features=features,
         )
         self.session.add(track)
+        record(self.session, uploaded_by_id, TRACK_ADDED)
         await self.session.flush()
 
         # Keep denormalised counters in step.
