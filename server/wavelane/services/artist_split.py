@@ -28,6 +28,8 @@ logger = logging.getLogger(__name__)
 class SplitReport:
     #: Artists that were really lists.
     combined: int = 0
+    #: Lists that had no tracks or albums left, and were only removed.
+    emptied: int = 0
     #: Artists that did not exist yet and were created from the pieces.
     created: int = 0
     tracks_changed: int = 0
@@ -48,6 +50,13 @@ async def split_combined_artists(session: AsyncSession) -> SplitReport:
     for artist in candidates:
         names = split_artist_name(artist.name)
         if names == [artist.name.strip()]:
+            continue
+
+        if not await _has_anything(session, artist.id):
+            # a list left behind by a correction: no tracks, no albums, nothing to hand over
+            report.emptied += 1
+            session.expunge(artist)
+            await session.execute(delete(Artist).where(Artist.id == artist.id))
             continue
 
         before = await session.scalar(select(func.count()).select_from(Artist))
@@ -87,6 +96,16 @@ async def split_combined_artists(session: AsyncSession) -> SplitReport:
         report.albums_merged,
     )
     return report
+
+
+async def _has_anything(session: AsyncSession, artist_id: uuid.UUID) -> bool:
+    on_tracks = await session.scalar(
+        select(func.count()).select_from(TrackArtist).where(TrackArtist.artist_id == artist_id)
+    )
+    on_albums = await session.scalar(
+        select(func.count()).select_from(Album).where(Album.artist_id == artist_id)
+    )
+    return bool(on_tracks or on_albums)
 
 
 async def _replace_in_track(

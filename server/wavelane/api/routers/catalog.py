@@ -38,7 +38,7 @@ from ...services.catalog import (
 )
 from ...services.editing import EditError, set_track_album, set_track_artists
 from ...services.storage import looks_like_image
-from ...services.removal import delete_tracks, unlink_audio
+from ...services.removal import delete_tracks, prune_empty, unlink_audio
 from ...utils import normalize_name, slugify
 from ..deps import (
     AdminUser,
@@ -134,6 +134,9 @@ async def update_track(
         track.title = payload.title.strip()
         track.normalized_title = normalize_name(track.title)
     lyrics_before = track.lyrics
+    # who and what the track belonged to, to tidy up if the edit leaves them empty
+    old_artist_ids = {link.artist_id for link in track.artist_links}
+    old_album_id = track.album_id
     for field in ("track_number", "disc_number", "explicit", "lyrics", "isrc"):
         value = getattr(payload, field)
         if value is not None:
@@ -155,6 +158,9 @@ async def update_track(
         ) from exc
 
     await db.flush()
+    # An artist the track no longer has, with nothing else of theirs, should not stay behind as
+    # an empty page (this is what a "A, B, C" artist turns into once its tracks are corrected).
+    await prune_empty(db, old_artist_ids, {old_album_id})
     items = await serialize_tracks(db, [track], user.id, include_features=True)
     return items[0]
 

@@ -51,12 +51,12 @@ async def test_a_track_can_be_moved_to_other_artists_and_album(
     assert body["album"]["title"] == "Right Album"
     assert body["album"]["release_year"] == 2021
 
-    # the new names are real artists now, and the old one no longer has the track
+    # the new names are real artists now, and the old one, left with nothing, is gone
     found = (await client.get(f"{api}/artists?q=right", headers=account.headers)).json()
     assert [a["name"] for a in found["items"]] == ["Right Name"]
     assert found["items"][0]["track_count"] == 1
     old = (await client.get(f"{api}/artists?q=wrong", headers=account.headers)).json()
-    assert old["items"][0]["track_count"] == 0
+    assert old["items"] == []
 
 
 async def test_leaving_parts_out_keeps_them_and_an_empty_album_removes_it(

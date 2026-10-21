@@ -26,6 +26,7 @@ async def _split_artists(apply: bool) -> None:
             await session.rollback()
 
     print(f"artists that are lists: {report.combined}")
+    print(f"empty lists removed: {report.emptied}")
     print(f"artists created from their pieces: {report.created}")
     print(f"tracks re-credited: {report.tracks_changed}")
     print(f"albums moved: {report.albums_moved}, merged into an existing one: {report.albums_merged}")

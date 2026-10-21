@@ -142,3 +142,44 @@ async def test_stored_lists_are_split_on_every_track_album_and_follow(client, ap
             )
             assert who.track_count == links, who.name
         assert (await split_combined_artists(session)).combined == 0
+
+
+async def test_correcting_a_track_leaves_no_empty_artist_behind(
+    client, api, account, tagged_wav_factory
+):
+    path = tagged_wav_factory(title="Song", artist="Duo & Solo")
+    with path.open("rb") as handle:
+        track = (
+            await client.post(
+                f"{api}/upload", headers=account.headers, files={"files": (path.name, handle, "audio/wav")}
+            )
+        ).json()["items"][0]["track"]
+    assert [a["name"] for a in track["artists"]] == ["Duo & Solo"]
+
+    response = await client.patch(
+        f"{api}/tracks/{track['id']}", headers=account.headers, json={"artists": ["Duo", "Solo"]}
+    )
+    assert response.status_code == 200, response.text
+
+    artists = (await client.get(f"{api}/artists?limit=50", headers=account.headers)).json()["items"]
+    assert sorted(a["name"] for a in artists) == ["Duo", "Solo"]
+
+
+async def test_an_empty_list_is_removed_without_making_artists_from_it(client, api, account):
+    from sqlalchemy import select
+
+    from wavelane.db import get_session_factory
+    from wavelane.models import Artist
+    from wavelane.services.artist_split import split_combined_artists
+    from wavelane.utils import normalize_name
+
+    async with get_session_factory()() as session:
+        name = "Ghost, Phantom"
+        session.add(Artist(name=name, normalized_name=normalize_name(name), sort_name=name))
+        await session.commit()
+
+    async with get_session_factory()() as session:
+        report = await split_combined_artists(session)
+        await session.commit()
+        assert (report.emptied, report.combined) == (1, 0)
+        assert list(await session.scalars(select(Artist.name))) == []
