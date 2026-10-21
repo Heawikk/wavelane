@@ -61,6 +61,11 @@ ApplicationWindow {
         target: library
         function onNotify(message) { toast.show(message) }
         function onConflictsFound() { conflictDialog.open() }
+        // a name was clicked somewhere: its page is in the search
+        function onArtistShown() {
+            window.lyricsOpen = false
+            window.showPage("search")
+        }
         function onReactionChanged(trackId, liked, disliked) {
             if (liked)
                 window.react("like")

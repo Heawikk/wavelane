@@ -150,6 +150,18 @@ tracks they added and deleted, how many lyrics they added and how many they
 synced. Tracks are credited to whoever uploaded them; deletions and lyrics are
 counted from the moment the server is updated.
 
+**Several artists on a track.** A credit like `A, B, C` makes three artists, not one called
+"A, B, C" (a comma separates names; `&` and "and" do not, since "Above & Beyond" is one act).
+Every name is a link to the artist's page, and on a phone the full player has an *About the
+artists* sheet (tap the strip at the bottom or pull the player up). Artists that were stored
+as a list before this can be split once, on the server, after a backup of the database:
+
+```
+cd server
+python -m wavelane.maintenance split-artists            # only shows what it would do
+python -m wavelane.maintenance split-artists --apply    # does it
+```
+
 **A whole folder.** *Upload folder* picks a folder on the computer you are
 sitting at (subfolders included) and sends its audio files to the server one by
 one, so it works with a remote server too. The server reads the tags, extracts

@@ -12,6 +12,8 @@ Rectangle {
     id: root
 
     property bool lyricsOpen: false
+    //! The sheet with the artists of the track is up.
+    property bool artistsOpen: false
 
     signal closed()
     signal lyricsToggled()
@@ -19,6 +21,19 @@ Rectangle {
     readonly property bool waveContext: player.context === "wave"
 
     color: Theme.bg
+
+    function loadArtists() {
+        library.loadPlayerArtists(player.currentTrack.artists || [])
+    }
+
+    onArtistsOpenChanged: if (artistsOpen) loadArtists()
+    // put away with the player, so it is not still there the next time
+    onVisibleChanged: if (!visible) artistsOpen = false
+
+    Connections {
+        target: player
+        function onCurrentTrackChanged() { if (root.artistsOpen) root.loadArtists() }
+    }
 
     function next() {
         if (waveContext)
@@ -74,7 +89,7 @@ Rectangle {
             property real travelY: 0
 
             target: null
-            enabled: !root.lyricsOpen
+            enabled: !root.lyricsOpen && !root.artistsOpen
 
             onActiveChanged: {
                 if (active) {
@@ -93,6 +108,9 @@ Rectangle {
                 root.shift = 0
                 if (how === "v" && dy > 110) {
                     root.closed()
+                } else if (how === "v" && dy < -90 && player.hasTrack) {
+                    // pulled up: the artists
+                    root.artistsOpen = true
                 } else if (how === "h" && player.hasTrack) {
                     if (dx < -90)
                         root.next()
@@ -181,13 +199,12 @@ Rectangle {
             Layout.topMargin: 4
             spacing: 8
 
-            Text {
+            ArtistLinks {
                 Layout.fillWidth: true
-                text: player.currentTrack.artistName || ""
+                artists: player.currentTrack.artists || []
+                fallback: player.currentTrack.artistName || ""
                 color: Theme.muted
-                font.family: Theme.sans
                 font.pixelSize: 15
-                elide: Text.ElideRight
             }
             LyricsBadge { kind: player.currentTrack.lyricsKind || "none" }
         }
@@ -286,7 +303,40 @@ Rectangle {
             }
         }
 
-        Item { Layout.preferredHeight: 28 }
+        // the way up to the artists: tapped, or pulled up like the sheet itself
+        Item {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 48
+            opacity: player.hasTrack ? 1 : 0.35
+
+            TapHandler {
+                enabled: player.hasTrack
+                onTapped: root.artistsOpen = true
+            }
+            DragHandler {
+                enabled: player.hasTrack && !root.artistsOpen
+                target: null
+                xAxis.enabled: false
+                onActiveChanged: if (!active && activeTranslation.y < -40) root.artistsOpen = true
+            }
+
+            Row {
+                anchors.centerIn: parent
+                spacing: 8
+
+                Icon {
+                    anchors.verticalCenter: parent.verticalCenter
+                    glyph: Theme.iChevronUp
+                    font.pixelSize: 18
+                    color: Theme.muted
+                }
+                Mono {
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: qsTr("Об исполнителях")
+                    color: Theme.muted
+                }
+            }
+        }
     }
 
     // --- the words, over everything ---
@@ -295,6 +345,13 @@ Rectangle {
         visible: root.lyricsOpen
         onEditRequested: lyricsEditor.openForCurrent()
         onCloseRequested: root.lyricsToggled()
+    }
+
+    ArtistsSheet {
+        width: parent.width
+        height: parent.height
+        opened: root.artistsOpen
+        onCloseRequested: root.artistsOpen = false
     }
 
     LyricsEditor { id: lyricsEditor }

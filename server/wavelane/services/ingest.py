@@ -44,14 +44,15 @@ from ..utils import normalize_name, now_utc, slugify
 from ..wave.features import canonical_genre, normalize_tempo
 from .admin_log import TRACK_ADDED, record
 from .audio_analysis import AudioAnalyzer, get_analyzer
+from .credits import split_commas
 from .storage import Storage, StoredFile, get_storage
 
 logger = logging.getLogger(__name__)
 
-# Main credits are split only on the separators tags actually reserve for the
-# purpose. Commas, "&" and "and" are left alone on purpose: "Earth, Wind & Fire"
-# and "Simon and Garfunkel" are one act each, and genuinely multi-valued tags
-# already reach us as separate values from mutagen.
+# Main credits are split on the separators tags reserve for the purpose, and on commas (see
+# services/credits.py). "&" and "and" are left alone on purpose: "Simon and Garfunkel" and
+# "Above & Beyond" are one act each, and genuinely multi-valued tags already reach us as
+# separate values from mutagen.
 _MAIN_SPLIT = re.compile(r"\s*[;/|]\s*")
 # After a "feat." marker the convention is looser, so split more eagerly there.
 _FEAT_SPLIT = re.compile(r"\s*(?:[;/|,]|&|\band\b|\bwith\b)\s*", re.IGNORECASE)
@@ -149,7 +150,7 @@ def read_metadata(path: Path, source_hint: Path | str | None = None) -> TrackMet
 
     if audio is None:
         meta.title = _title_from_filename(hint)
-        meta.artists = [_artist_from_filename(hint) or "Unknown Artist"]
+        meta.artists = _split_filename_artist(hint)
         return meta
 
     _read_stream_info(audio, meta)
@@ -160,8 +161,7 @@ def read_metadata(path: Path, source_hint: Path | str | None = None) -> TrackMet
     if not meta.title:
         meta.title = _title_from_filename(hint)
     if not meta.artists:
-        guessed = _artist_from_filename(hint)
-        meta.artists = [guessed] if guessed else ["Unknown Artist"]
+        meta.artists = _split_filename_artist(hint)
     if meta.track_number is None:
         match = _TRACK_NUM_RE.match(hint.stem)
         if match:
@@ -273,7 +273,7 @@ def _apply_tags(tags: dict[str, list[str]], meta: TrackMetadata) -> None:
     meta.artists = main
     meta.featured_artists = featured
     if not meta.artists and meta.album_artist:
-        meta.artists = [meta.album_artist]
+        meta.artists = _split_credit(meta.album_artist, _MAIN_SPLIT) or [meta.album_artist]
 
     albums = _lookup(tags, "album")
     if albums:
@@ -345,10 +345,17 @@ def _split_artists(raw_artists: list[str], title: str) -> tuple[list[str], list[
     return main, featured
 
 
+def _split_filename_artist(hint: Path) -> list[str]:
+    guessed = _artist_from_filename(hint)
+    return (_split_credit(guessed, _MAIN_SPLIT) if guessed else []) or ["Unknown Artist"]
+
+
 def _split_credit(value: str, pattern: re.Pattern[str]) -> list[str]:
     if not value:
         return []
     parts = [part.strip(" )(-–—") for part in pattern.split(value)]
+    if pattern is _MAIN_SPLIT:
+        parts = [name for part in parts for name in split_commas(part)]
     return [part for part in parts if len(part) > 1]
 
 
@@ -869,7 +876,9 @@ class IngestService:
 
         # Album artist wins: a compilation should not be filed under track 1's artist.
         if meta.album_artist:
-            owner = await self._get_or_create_artist(meta.album_artist)
+            # "A, B" as the album artist files the album under A, whose page lists it.
+            owner_name = (_split_credit(meta.album_artist, _MAIN_SPLIT) or [meta.album_artist])[0]
+            owner = await self._get_or_create_artist(owner_name)
         else:
             owner = artists["main"][0]
 

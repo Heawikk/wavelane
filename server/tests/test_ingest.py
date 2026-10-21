@@ -30,6 +30,14 @@ def test_artist_splitting_keeps_band_names_intact():
     main, featured = _split_artists(["Simon and Garfunkel"], "America")
     assert main == ["Simon and Garfunkel"]
 
+    # A comma between names is a list, unless the act is one of the few with a comma in its name.
+    main, _ = _split_artists(["M1LUM, Орущий дед, Фазер Мартин"], "Song")
+    assert main == ["M1LUM", "Орущий дед", "Фазер Мартин"]
+    main, _ = _split_artists(["Tyler, The Creator, Frank Ocean"], "Song")
+    assert main == ["Tyler, The Creator", "Frank Ocean"]
+    main, _ = _split_artists(["Above & Beyond, Gareth Emery"], "Song")
+    assert main == ["Above & Beyond", "Gareth Emery"]
+
     # Reserved separators do split.
     main, _ = _split_artists(["Artist A; Artist B"], "Song")
     assert main == ["Artist A", "Artist B"]

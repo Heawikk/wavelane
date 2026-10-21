@@ -52,6 +52,12 @@ ApplicationWindow {
     Connections {
         target: library
         function onNotify(message) { toast.show(message) }
+        // a name was clicked somewhere: its page is in the search, under the player
+        function onArtistShown() {
+            window.lyricsOpen = false
+            window.nowPlayingOpen = false
+            window.showPage("search")
+        }
     }
     Connections {
         target: lyrics
@@ -95,6 +101,9 @@ ApplicationWindow {
     onClosing: function(close) {
         if (lyricsOpen) {
             lyricsOpen = false
+            close.accepted = false
+        } else if (nowPlayingOpen && nowPlaying.artistsOpen) {
+            nowPlaying.artistsOpen = false
             close.accepted = false
         } else if (nowPlayingOpen) {
             nowPlayingOpen = false

@@ -35,6 +35,7 @@ public:
         QualityRole,
         PlayCountRole,
         GenresRole,
+        ArtistsRole,
         ScoreRole,
         ReasonRole,
         FeaturesRole,

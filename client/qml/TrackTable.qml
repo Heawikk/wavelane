@@ -245,6 +245,7 @@ Item {
                     trackId: player.currentTrack.id || ""
                     title: player.currentTrack.title || ""
                     artistName: player.currentTrack.artistName || ""
+                    artists: player.currentTrack.artists || []
                     albumTitle: player.currentTrack.albumTitle || ""
                     coverPath: player.currentTrack.coverPath || ""
                     duration: player.currentTrack.duration || ""
@@ -296,6 +297,7 @@ Item {
                 trackId: model.trackId
                 title: model.title
                 artistName: model.artistName
+                artists: model.artists
                 albumTitle: model.albumTitle
                 coverPath: model.coverPath
                 duration: model.duration

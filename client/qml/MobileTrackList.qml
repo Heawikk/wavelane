@@ -64,6 +64,7 @@ ListView {
         required property string trackId
         required property string title
         required property string artistName
+        required property var artists
         required property string coverPath
         required property string duration
         required property bool liked
@@ -121,13 +122,12 @@ ListView {
                     LyricsBadge { kind: row.lyricsKind }
                     Item { Layout.fillWidth: true }
                 }
-                Text {
+                ArtistLinks {
                     Layout.fillWidth: true
-                    text: row.artistName
+                    artists: row.artists
+                    fallback: row.artistName
                     color: Theme.muted
-                    font.family: Theme.sans
                     font.pixelSize: 13
-                    elide: Text.ElideRight
                 }
             }
 

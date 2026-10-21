@@ -38,6 +38,8 @@ class LibraryController : public QObject
     //! Totals for the administrator's dashboard; empty until loaded.
     Q_PROPERTY(QVariantMap adminStats READ adminStats NOTIFY adminStatsChanged)
     Q_PROPERTY(QVariantMap adminTeam READ adminTeam NOTIFY adminTeamChanged)
+    //! The artists of the track in the full player, with their pictures and descriptions.
+    Q_PROPERTY(QVariantList playerArtists READ playerArtists NOTIFY playerArtistsChanged)
     //! More of the catalogue exists on the server than is loaded.
     Q_PROPERTY(bool catalogueHasMore READ catalogueHasMore NOTIFY statsChanged)
     //! The administrator's list of artists, and how many the server has (for the search typed).
@@ -77,6 +79,7 @@ public:
     bool browseLoading() const { return m_browseLoading; }
     QVariantMap adminStats() const { return m_adminStats; }
     QVariantMap adminTeam() const { return m_adminTeam; }
+    QVariantList playerArtists() const { return m_playerArtists; }
     bool catalogueHasMore() const { return m_catalogue->count() < m_trackCount; }
     ArtistListModel *adminArtists() const { return m_adminArtists; }
     int adminArtistsTotal() const { return m_adminArtistsTotal; }
@@ -122,6 +125,10 @@ public:
     Q_INVOKABLE void closeBrowse();
     Q_INVOKABLE void loadAdminStats();
     Q_INVOKABLE void loadAdminTeam();
+    //! Open an artist's page from anywhere in the app (the window switches to it).
+    Q_INVOKABLE void showArtist(const QString &artistId, const QString &name);
+    //! Fetch the artists of a track's credits (maps with "id" and "name") for the player's sheet.
+    Q_INVOKABLE void loadPlayerArtists(const QVariantList &credits);
     Q_INVOKABLE void loadStats();
 
     //! Toggle like / dislike on any track, from any list.
@@ -173,6 +180,9 @@ signals:
     void browseChanged();
     void adminStatsChanged();
     void adminTeamChanged();
+    void playerArtistsChanged();
+    //! An artist's page was asked for; the window should show the search page.
+    void artistShown();
     void adminArtistsChanged();
     void trackEditChanged();
     void savingChanged();
@@ -222,6 +232,8 @@ private:
     bool m_browseLoading = false;
     QVariantMap m_adminStats;
     QVariantMap m_adminTeam;
+    QVariantList m_playerArtists;
+    int m_playerArtistsRun = 0;
     bool m_loadingMore = false;
     QString m_catalogueQuery;
     ArtistListModel *m_adminArtists = nullptr;

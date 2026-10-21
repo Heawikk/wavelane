@@ -3,6 +3,7 @@
 #include <QJsonObject>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
 #include <QVariantMap>
 
 /*!
@@ -30,6 +31,8 @@ struct Track
     bool liked = false;
     bool disliked = false;
     QStringList genres;
+    //! Who made it: maps with "id", "name" and "role" ("main" or "featured"), in billing order.
+    QVariantList artists;
     //! "none", "plain" or "synced": whether there are words, and whether they follow the music.
     QString lyricsKind = QStringLiteral("none");
 

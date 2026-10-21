@@ -16,6 +16,8 @@ Rectangle {
     property string trackId: ""
     property string title: ""
     property string artistName: ""
+    //! The credits (id, name, role), so each name can be a link; the plain text shows without them.
+    property var artists: []
     property string albumTitle: ""
     property string coverPath: ""
     property string duration: ""
@@ -169,13 +171,12 @@ Rectangle {
 
         }
 
-        Text {
+        ArtistLinks {
             Layout.preferredWidth: root.colArtist
-            text: root.artistName
+            artists: root.artists
+            fallback: root.artistName
             color: Theme.muted
-            font.family: Theme.sans
             font.pixelSize: Theme.fontSmall
-            elide: Text.ElideRight
         }
 
         Text {

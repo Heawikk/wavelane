@@ -80,14 +80,13 @@ Rectangle {
                     font.weight: Font.DemiBold
                     elide: Text.ElideRight
                 }
-                Text {
+                ArtistLinks {
                     Layout.fillWidth: true
                     visible: player.hasTrack
-                    text: player.currentTrack.artistName || ""
+                    artists: player.currentTrack.artists || []
+                    fallback: player.currentTrack.artistName || ""
                     color: Theme.muted
-                    font.family: Theme.sans
                     font.pixelSize: Theme.fontSmall
-                    elide: Text.ElideRight
                 }
             }
         }

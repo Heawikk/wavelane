@@ -40,6 +40,7 @@ QVariant TrackListModel::data(const QModelIndex &index, int role) const
     case QualityRole:    return track.qualityLabel();
     case PlayCountRole:  return track.playCount;
     case GenresRole:     return track.genres;
+    case ArtistsRole:    return track.artists;
     case ScoreRole:      return track.score;
     case ReasonRole:     return track.reasonSummary;
     case FeaturesRole:   return track.features;
@@ -67,6 +68,7 @@ QHash<int, QByteArray> TrackListModel::roleNames() const
         {QualityRole,    QByteArrayLiteral("quality")},
         {PlayCountRole,  QByteArrayLiteral("playCount")},
         {GenresRole,     QByteArrayLiteral("genres")},
+        {ArtistsRole,    QByteArrayLiteral("artists")},
         {ScoreRole,      QByteArrayLiteral("score")},
         {ReasonRole,     QByteArrayLiteral("reason")},
         {FeaturesRole,   QByteArrayLiteral("features")},

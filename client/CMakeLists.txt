@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 
-project(Wavelane VERSION 1.0.3 LANGUAGES CXX)
+project(Wavelane VERSION 1.0.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -103,6 +103,8 @@ qt_add_qml_module(wavelane
         qml/AdminUpload.qml
         qml/ResultShelf.qml
         qml/ArtistAvatar.qml
+        qml/ArtistLinks.qml
+        qml/ArtistsSheet.qml
         qml/SearchBox.qml
         qml/TrackEditDialog.qml
         qml/ArtistEditDialog.qml

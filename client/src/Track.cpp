@@ -30,6 +30,19 @@ Track Track::fromJson(const QJsonObject &object)
             track.coverPath = album.value(QStringLiteral("cover_path")).toString();
     }
 
+    const QJsonArray credits = object.value(QStringLiteral("artists")).toArray();
+    for (const QJsonValue &credit : credits) {
+        const QJsonObject artist = credit.toObject();
+        const QString role = artist.value(QStringLiteral("role")).toString();
+        if (role != QLatin1String("main") && role != QLatin1String("featured"))
+            continue;
+        track.artists.append(QVariantMap{
+            {QStringLiteral("id"), artist.value(QStringLiteral("id")).toString()},
+            {QStringLiteral("name"), artist.value(QStringLiteral("name")).toString()},
+            {QStringLiteral("role"), role},
+        });
+    }
+
     const QJsonArray genres = object.value(QStringLiteral("genres")).toArray();
     for (const QJsonValue &genre : genres)
         track.genres.append(genre.toString());
@@ -64,6 +77,7 @@ QVariantMap Track::toVariantMap() const
         {QStringLiteral("liked"), liked},
         {QStringLiteral("disliked"), disliked},
         {QStringLiteral("genres"), genres},
+        {QStringLiteral("artists"), artists},
         {QStringLiteral("lyricsKind"), lyricsKind},
         {QStringLiteral("streamUrl"), streamUrl},
         {QStringLiteral("score"), score},

@@ -14,6 +14,7 @@
 #include <QUrlQuery>
 
 #include <algorithm>
+#include <memory>
 
 LibraryController::LibraryController(ApiClient *api, Player *player, QObject *parent)
     : QObject(parent)
@@ -234,6 +235,52 @@ void LibraryController::loadAdminTeam()
         m_adminTeam = response.object.toVariantMap();
         emit adminTeamChanged();
     });
+}
+
+void LibraryController::showArtist(const QString &artistId, const QString &name)
+{
+    if (artistId.isEmpty())
+        return;
+    openArtist(artistId, name);
+    emit artistShown();
+}
+
+void LibraryController::loadPlayerArtists(const QVariantList &credits)
+{
+    // One request per artist, put back in the order of the credits when all have answered; an
+    // answer for a track that is no longer playing is dropped.
+    const int run = ++m_playerArtistsRun;
+    m_playerArtists.clear();
+    emit playerArtistsChanged();
+    if (credits.isEmpty())
+        return;
+
+    auto results = std::make_shared<QVariantList>();
+    for (const QVariant &credit : credits) {
+        const QVariantMap entry = credit.toMap();
+        // what is known now; the answer adds the picture and the rest
+        results->append(QVariantMap{{QStringLiteral("id"), entry.value(QStringLiteral("id"))},
+                                    {QStringLiteral("name"), entry.value(QStringLiteral("name"))},
+                                    {QStringLiteral("role"), entry.value(QStringLiteral("role"))}});
+    }
+    m_playerArtists = *results;
+    emit playerArtistsChanged();
+
+    for (int i = 0; i < credits.size(); ++i) {
+        const QString id = credits.at(i).toMap().value(QStringLiteral("id")).toString();
+        m_api->get(QStringLiteral("/artists/%1").arg(id), [this, run, i, results](const ApiClient::Response &response) {
+            if (run != m_playerArtistsRun || !response.ok())
+                return;
+            QVariantMap entry = results->at(i).toMap();
+            entry.insert(QStringLiteral("imagePath"), response.object.value(QStringLiteral("image_path")).toString());
+            entry.insert(QStringLiteral("bio"), response.object.value(QStringLiteral("bio")).toString());
+            entry.insert(QStringLiteral("country"), response.object.value(QStringLiteral("country")).toString());
+            entry.insert(QStringLiteral("trackCount"), response.object.value(QStringLiteral("track_count")).toInt());
+            (*results)[i] = entry;
+            m_playerArtists = *results;
+            emit playerArtistsChanged();
+        });
+    }
 }
 
 void LibraryController::loadLiked()
@@ -1057,10 +1104,13 @@ void LibraryController::clear()
     m_searchAlbums.clear();
     m_adminStats.clear();
     m_adminTeam.clear();
+    m_playerArtists.clear();
+    ++m_playerArtistsRun;
     emit searchGroupsChanged();
     emit browseChanged();
     emit adminStatsChanged();
     emit adminTeamChanged();
+    emit playerArtistsChanged();
     m_activeList = nullptr;
     m_activeRow = -1;
     m_importTimer.stop();

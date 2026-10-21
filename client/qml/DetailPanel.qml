@@ -181,13 +181,12 @@ Rectangle {
                         elide: Text.ElideRight
                         lineHeight: 1.05
                     }
-                    Text {
+                    ArtistLinks {
                         Layout.fillWidth: true
-                        text: root.hasTrack ? root.track.artistName : ""
+                        artists: root.hasTrack ? (root.track.artists || []) : []
+                        fallback: root.hasTrack ? root.track.artistName : ""
                         color: Theme.muted
-                        font.family: Theme.sans
                         font.pixelSize: Theme.fontBody
-                        elide: Text.ElideRight
                     }
                     Mono {
                         Layout.fillWidth: true
